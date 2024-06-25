@@ -10,6 +10,7 @@
 namespace CppRtos
 {
 
+
 	constexpr std::uint32_t MAX_NUMBER_OF_TASKS = 16u;
 
 	enum class KernelState : std::uint8_t
@@ -21,8 +22,6 @@ namespace CppRtos
 		eSuspended = 4u,
 		eError = 0xFFu
 	};
-
-
 
 	const char* KernelVersion = "1.1";
 
@@ -41,7 +40,8 @@ namespace CppRtos
 
     class Kernel final
     {
-    public:
+		friend class KernelFactory;
+    private:
 
 		Kernel()
             :  _state( KernelState::eReset )
@@ -53,8 +53,18 @@ namespace CppRtos
 			_tasks.fill(nullptr);
         }
 
-        ~Kernel() = default;
 
+		~Kernel()
+		{
+		}
+
+		 Kernel(const Kernel&) = delete;
+		        Kernel& operator=(const Kernel&) = delete;
+		        Kernel(Kernel&&) = delete;
+		        Kernel& operator=(Kernel&&) = delete;
+
+
+    public:
         template<std::size_t STACK_SIZE>
         void addTask( Task<STACK_SIZE>& task )
         {
@@ -118,4 +128,60 @@ namespace CppRtos
         Port::Port _port;
 
     };
+
+
+    std::aligned_storage_t<sizeof(Kernel)> buffer;
+
+
+	class KernelFactory
+	{
+	private:
+
+		bool _isCreated = false;
+		Kernel* _instance = nullptr;
+
+		/**
+		* @brief Private constructor to prevent external instantiation.
+		*/
+		KernelFactory() : _isCreated(false), _instance(nullptr)
+		{
+		}
+
+	public:
+
+		// Prevent creating multiple instances of the KernelFactory
+		KernelFactory(const KernelFactory&) = delete;
+		KernelFactory& operator=(const KernelFactory&) = delete;
+
+		inline static KernelFactory& getInstance()
+		{
+			static KernelFactory instanceFactory; // This creates a single instance on first use
+			return instanceFactory;
+		}
+
+		inline Kernel* getKernel()
+		{
+			return _instance;
+		}
+
+
+		Kernel* create( void* platformMemory )
+		{
+			if (_isCreated)
+			{
+				return nullptr;
+			}
+			_isCreated = true;
+			return new(platformMemory) Kernel();
+		}
+
+		void destroy( void* platformMemory )
+		{
+			if (_isCreated)
+			{
+				static_cast<Kernel*>(platformMemory)->~Kernel();
+				_isCreated = false;
+			}
+		}
+	};
 }

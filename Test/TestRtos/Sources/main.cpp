@@ -24,6 +24,8 @@
 
 #include "stm32h7xx.h"  // Include the STM32 device-specific header file
 
+#include <type_traits>
+
 void FPU_init(void)
 {
     // Set CP10 and CP11 Full Access
@@ -48,11 +50,16 @@ public:
 	}
 };
 
+
+std::aligned_storage_t<sizeof(CppRtos::Kernel)> _prealoc_kernel_mem;
+
 int main(void)
 {
 	FPU_init();
 
-	CppRtos::Kernel kernel;
+	CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
+	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
+
 
 	std::string_view taskName1 = "Task 1";
 
@@ -60,7 +67,7 @@ int main(void)
 	task1.setPriority(50);
 	task1.setName( taskName1);
 
-	kernel.addTask(task1);
+	ptrKernel->addTask(task1);
 
 
 
