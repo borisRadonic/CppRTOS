@@ -104,35 +104,6 @@ namespace CppRtos
 {
 	namespace Port
 	{
-
-
-		bool Port::isInsideInterrupt( void ) const
-		{
-			std::uint32_t currInt(0u);
-		    __asm volatile ( "mrs %0, ipsr" : "=r" ( currInt )::"memory" );
-		    return( 0u != currInt );
-		}
-
-		inline void Port::disableInterrupts( void )  const
-		{
-			ulRaiseBASEPRI();
-		}
-
-		inline void Port::enableInterrupts( void )  const
-		{
-			vSetBASEPRI(0u);
-		}
-
-		inline void Port::enterCritical(void)  const
-		{
-			ulRaiseBASEPRI(); //disable interrupts
-		}
-
-		inline void Port::exitCritical(void)  const
-		{
-			enableInterrupts();
-		}
-
 		void Port::vRaiseBASEPRI( void ) const
 		{
 			std::uint32_t basePri(0u);
@@ -167,20 +138,6 @@ namespace CppRtos
 		}
 
 
-
-
-		inline void Port::vSetBASEPRI(std::uint32_t value) const
-		{
-			__asm volatile
-			(
-					"   msr basepri, %0 " ::"r" ( value ) : "memory"
-			);
-		}
-
-		inline void Port::memoryBarrier( void ) const
-		{
-			__asm volatile ( "" ::: "memory" );
-		}
 
 		void Port::setupTimerInterrupt( void ) const
 		{

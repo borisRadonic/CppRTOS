@@ -18,7 +18,9 @@
 
 #include <stdint.h>
 
-#include "../../../Include/Port.hpp"
+#include "Port.hpp"
+#include "Task.hpp"
+#include "Kernel.hpp"
 
 #include "stm32h7xx.h"  // Include the STM32 device-specific header file
 
@@ -29,11 +31,41 @@ void FPU_init(void)
 }
 
 
+class Task1 : public CppRtos::Task<2048>
+{
+public:
+
+	Task1():CppRtos::Task<2048>()
+	{
+
+	}
+
+	void run() override
+	{
+		while(true)
+		{
+		}
+	}
+};
+
 int main(void)
 {
 	FPU_init();
 
-	CppRtos::Port::Port port;
+	CppRtos::Kernel kernel;
+
+	std::string_view taskName1 = "Task 1";
+
+	Task1 task1;
+	task1.setPriority(50);
+	task1.setName( taskName1);
+
+	kernel.addTask(task1);
+
+
+
+
+	//CppRtos::Port::Port port;
     /* Loop forever */
 	for(;;);
 }
