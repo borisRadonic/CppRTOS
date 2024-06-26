@@ -252,30 +252,51 @@ namespace CppRtos
 			while( true) {};
 		}
 
+/*
+The xPSR (Program Status Register) is a critical register in ARM Cortex-M processors, including the Cortex-M7. It combines three separate status registers: the Application Program Status Register (APSR), the Interrupt Program Status Register (IPSR), and the Execution Program Status Register (EPSR). Here’s a detailed breakdown of its components and their purposes:
+
+Components of xPSR
+APSR (Application Program Status Register):
+
+N (Negative) Flag: Indicates that the result of the last arithmetic operation was negative.
+Z (Zero) Flag: Indicates that the result of the last arithmetic operation was zero.
+C (Carry) Flag: Indicates that the last arithmetic operation resulted in a carry or borrow.
+V (Overflow) Flag: Indicates that the last arithmetic operation resulted in an overflow.
+IPSR (Interrupt Program Status Register):
+
+ISR Number: Contains the number of the current exception or interrupt being processed. If no interrupt is being processed, this field is zero.
+EPSR (Execution Program Status Register):
+
+Thumb State Bit (T): Indicates the processor state. It should always be set to 1 in Cortex-M processors, indicating that the processor is executing Thumb instructions.
+ICI/IT (If-Then Execution State Bits): Control conditional execution of instructions within an IT (If-Then) block.
+*/
 		void* Port::pxPortInitialiseStack(void* pxTopOfStack, /*TaskFunction_t*/ std::uint32_t pxCode, void* pvParameters)
 		{
-//			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
-//
-//			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
-//			 pxTopOfStack--;
-//
-//			 *pxTopOfStack = portINITIAL_XPSR;                                    /* xPSR */
-//			 pxTopOfStack--;
-//			 *pxTopOfStack = ( ( StackType_t ) pxCode ) & portSTART_ADDRESS_MASK; /* PC */
-//			 pxTopOfStack--;
-//			 *pxTopOfStack = ( StackType_t ) portTASK_RETURN_ADDRESS;             /* LR */
-//
-//			    /* Save code space by skipping register initialisation. */
-//			 pxTopOfStack -= 5;                            /* R12, R3, R2 and R1. */
-//			 *pxTopOfStack = ( StackType_t ) pvParameters; /* R0 */
-//
-//			    /* A save method is being used that requires each task to maintain its
-//			     * own exec return value. */
-//			 pxTopOfStack--;
-//			 *pxTopOfStack = portINITIAL_EXC_RETURN;
-//
-//			 pxTopOfStack -= 8; /* R11, R10, R9, R8, R7, R6, R5 and R4. */
+			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
 
+			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
+			 pxTopOfStack--;
+
+			 *pxTopOfStack = 0x01000000;   /* xPSR: Set the Thumb state bit (T bit) */
+			 pxTopOfStack--;
+
+			/* Adress Mask 0xfffffffeUL For strict compliance with the Cortex-M spec the task start
+   			address should have bit-0 clear, as it is loaded into the PC on exit from an ISR. */
+
+			
+			 *pxTopOfStack = ( ( StackType_t ) pxCode ) & 0xfffffffeUL; /* PC */
+			 pxTopOfStack--;
+
+			/*Return Address*/
+			 *pxTopOfStack = ( StackType_t ) prvTaskExitError;             /* LR */
+   		       
+			 pxTopOfStack -= 5;                            /* R12, R3, R2 and R1. */
+			 *pxTopOfStack = ( StackType_t ) pvParameters; /* R0 */
+
+			 pxTopOfStack--;
+			 *pxTopOfStack = pvParameters; /* R0: Argument - return value*/
+
+			 pxTopOfStack -= 8; /* R11, R10, R9, R8, R7, R6, R5 and R4. */
 			 return pxTopOfStack;
 		}
 
