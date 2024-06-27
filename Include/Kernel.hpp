@@ -3,16 +3,19 @@
 #include <cstdint>
 #include <cstddef>
 #include <array>
+#include <assert.h>
+
 #include "Task.hpp"
 #include "Port.hpp"
 #include "Config.hpp"
+#include "IdleTask.h"
+#include "Fifo.hpp"
 
 namespace CppRtos
 {
 
-
-	constexpr std::uint32_t MAX_NUMBER_OF_TASKS = 16u;
-
+	std::uint32_t WAIT_FOREVER = 0xFFFFFFFF;
+	
 	enum class KernelState : std::uint8_t
 	{
 		eReset = 0u,
@@ -34,9 +37,7 @@ namespace CppRtos
 		eNotRunning 	= 3u,
 		eLocked 		= 4u
 	};
-
-	//using StackAddr = std::size_t;
-       
+    
 
     class Kernel final
     {
@@ -45,14 +46,16 @@ namespace CppRtos
 
 		Kernel()
             :  _state( KernelState::eReset )
-			, _lastError( KernelError::eOK )
-			, _tickCount ( 0u )
-			, _sysTimerCount( 0u )
+			, _lastError( KernelError::eOK )			
 			, _taskCount (0u)
         {
 			_tasks.fill(nullptr);
-        }
 
+			this->addTask( _idleTask );
+			_currentTask = _idleTask.getTaskData();
+
+			//Add Timer Task
+        }
 
 		~Kernel()
 		{
@@ -78,50 +81,115 @@ namespace CppRtos
         		//add task to the Ready List
         		_port.enterCritical();
 
+				_readyTasks.enqueue( ptrTaskData );
+
         		_port.exitCritical();
 
         	}
         }
+
+		TaskData* getCurrentTask() const
+		{
+			return _currentTask;
+		}
 
         const char* getVersion()
         {
         	return KernelVersion;
         }
 
-        bool initialize();
+        void initialize()
+		{
+			_state = KernelState::eReady;
+		}
 
-        void lock();
+		void start()
+		{
+			assert( _state == KernelState::eReady );
+			if( _state == KernelState::eReady)
+			{
+				_port.startScheduler();
+			}
+		}
 
-        void unLock();
+        void lock()
+		{
+			//todo
+			_state = KernelState::eLocked;
+		}
 
-        void suspend();
+        void unLock()
+		{
+			//todo
+			//_state = KernelState::eRunning; ???
+		}
 
-        void incrementTickCount();
+        void suspend()
+		{
+		//todo
+			_state = KernelState::eSuspended;
+		}
 
-        void incrementSysTimerCount();
+        inline void incrementTickCount()
+		{
+			_port.incrementTickCount();
+		}
+
+        inline void incrementSysTimerCount()
+		{
+			_port.incrementSysTimerCount();
+		}
 
         inline std::uint64_t getTickCount() const
         {
-        	return _tickCount;
+        	return _port.getTickCount();
         }
 
         inline std::uint64_t getSysTimerCount() const
         {
-        	return _sysTimerCount;
+        	return _port.getSysTimerCount();
         }
 
-    private:
+		inline void disableInterrupts()
+		{
+			_port.disableInterrupts();
+		}
 
+		inline void enableInterrupts()
+		{
+			_port.enableInterrupts();
+		}
+
+		inline void yield()
+		{
+			_port.yield();
+		}
+
+		inline void switchContext()
+		{
+			/*TODO: Implement logic here...*/
+			_port.switchContext();
+		}
+
+		inline bool isInsideInterrupt( void ) const
+		{
+			return _port.isInsideInterrupt();
+		}
+
+
+    private:
 
         KernelState 	_state = KernelState::eReset;
 
         KernelError 	_lastError = KernelError::eOK;
-
-        std::uint64_t 	_tickCount = 0u;
-
-        std::uint64_t 	_sysTimerCount = 0u;
-
+      
         std::array<TaskData*, Settings::MAX_TASKS> _tasks;
+
+		Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
+
+		TaskData* _currentTask = nullptr;
+
+		IdleTask _idleTask;
 
         std::size_t _taskCount = 0u;  // Current count of added tasks
 
@@ -131,7 +199,6 @@ namespace CppRtos
 
 
     std::aligned_storage_t<sizeof(Kernel)> buffer;
-
 
 	class KernelFactory
 	{
@@ -163,7 +230,6 @@ namespace CppRtos
 		{
 			return _instance;
 		}
-
 
 		Kernel* create( void* platformMemory )
 		{

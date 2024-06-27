@@ -1,13 +1,16 @@
 #include "../Include/Port.hpp"
 #include "../Include/Config.hpp"
-
+#include "Kernel.hpp"
 
 
 	extern "C" void vPortSVCHandler( void );
 	extern "C" void xPortPendSVHandler( void );
 
 
-#define MAX_SYSCALL_INTERRUPT_PRIORITY 5u
+
+
+
+	
 
 	volatile void *pxCurrentTCB  = nullptr;
 
@@ -41,9 +44,6 @@
 
 	void pendSVHandler( void )
 	{
-		/* This is a naked function. */
-
-
 		__asm volatile
 		(
 			"   mrs r0, psp                         \n" /*the current location of the psp (the stack that was in use prior to exception entry) is loaded into r0*/
@@ -104,7 +104,7 @@ namespace CppRtos
 {
 	namespace Port
 	{
-		void Port::vRaiseBASEPRI( void ) const
+		void Port::raiseBASEPRI( void ) const
 		{
 			std::uint32_t basePri(0u);
 			__asm volatile
@@ -119,14 +119,14 @@ namespace CppRtos
 			);
 		}
 
-		std::uint32_t Port::ulRaiseBASEPRI( void ) const
+		std::uint32_t Port::raiseGetBASEPRI( void ) const
 		{
 			std::uint32_t origBasePri(0u);
 			std::uint32_t newBasePri(0u);
 			__asm volatile
 			(
 				"   mrs %0, basepri                                         \n" \
-				"   mov %1, %2                                              \n" \
+				"   mov %1, %2                                              \n" \	
 				"   cpsid i                                                 \n" \
 				"   msr basepri, %1                                         \n" \
 				"   isb                                                     \n" \
@@ -137,55 +137,49 @@ namespace CppRtos
 			return origBasePri;
 		}
 
-
-
 		void Port::setupTimerInterrupt( void ) const
 		{
-			/* Stop and clear the SysTick. */
-		//portNVIC_SYSTICK_CTRL_REG = 0UL;
-		// portNVIC_SYSTICK_CURRENT_VALUE_REG = 0UL;
+			SYSTICK_CTRL_REG 			= 0U; // Stop SysTick.
+			SYSTICK_CURRENT_VALUE_REG 	= 0U; // Reset the current value of the SysTick counter to 0
+		
+		 	// Configure SysTick
+			SYSTICK_LOAD_REG =  ((CPU_CLOCK_HZ / Settings::TICK_RATE_HZ ) - 1u);
 
-		 /* Configure SysTick to interrupt at the requested rate. */
-		//	    portNVIC_SYSTICK_LOAD_REG = ( configSYSTICK_CLOCK_HZ / configTICK_RATE_HZ ) - 1UL;
-		//	    portNVIC_SYSTICK_CTRL_REG = ( portNVIC_SYSTICK_CLK_BIT_CONFIG | portNVIC_SYSTICK_INT_BIT | portNVIC_SYSTICK_ENABLE_BIT );
+			// Internal Clock, Enable SysTick Interrupt and Enable the SysTick counter
+		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
 		}
 
-//		void xPortSysTickHandler( void )
-//		{
-//			//disable interrupts
-//			ulRaiseBASEPRI();
-//			 /* Increment the RTOS tick. */
-//			 if( xTaskIncrementTick() != pdFALSE )
-//			 {
-//				 /* A context switch is required.  Context switching is performed in  the PendSV interrupt.  Pend the PendSV interrupt. */
-//			     portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;
-//			 }
-//			 vSetBASEPRI(0u);
-//		}
-
+		void xPortSysTickHandler( void )
+		{
+			//disable interrupts
+			//ulRaiseBASEPRI();
+			 /* Increment the RTOS tick. */
+			 //if( xTaskIncrementTick() != pdFALSE )
+			 //{
+			//	 /* A context switch is required.  Context switching is performed in  the PendSV interrupt.  Pend the PendSV interrupt. */
+			 //    portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;
+			 //}
+			 //vSetBASEPRI(0u);
+		}
 
 
 		void Port::validateInterruptPriority(void) const
 		{
-
 		}
 
-
-		bool Port::startScheduler(void) const
+		void Port::startScheduler(void) const
 		{
+		 	// Make PendSV and SysTick the lowest priority interrupts
+			NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 16)) | NVIC_PENDSV_PRI;
+        	NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 24)) | NVIC_SYSTICK_PRI;
+			
+			// Make SVCall the highest priority interrupt. 
+			NVIC_SHPR2 = 0u;
 
+		 	// Start the timer for the tick ISR.
+			this->setupTimerInterrupt();
 
-		 /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
-			 * the highest priority. */
-			//portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
-			//portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
-			//portNVIC_SHPR2_REG = 0;
-
-		 /* Start the timer that generates the tick ISR.  Interrupts are disabled
-			 * here already. */
-			//vPortSetupTimerInterrupt();
-
-			/* Enable VFPd  */
+			// Enable VFP
 			this->enableVFP();
 
 		 /* Lazy save always. */
@@ -199,13 +193,10 @@ namespace CppRtos
 			* exit error function to prevent compiler warnings about a static function
 			* not being called in the case that the application writer overrides this
 			* functionality by defining configTASK_RETURN_ADDRESS.  Call
-			* vTaskSwitchContext() so link time optimisation does not remove the
-			* symbol. */
+			* vTaskSwitchContext() so link time optimisation does not remove the symbol. */
 			//vTaskSwitchContext();
 			//prvTaskExitError();
 			/* Should not get here! */
-
-			return false;
 		}
 
 		void Port::endScheduler(void) const
@@ -252,24 +243,26 @@ namespace CppRtos
 			while( true) {};
 		}
 
-/*
-The xPSR (Program Status Register) is a critical register in ARM Cortex-M processors, including the Cortex-M7. It combines three separate status registers: the Application Program Status Register (APSR), the Interrupt Program Status Register (IPSR), and the Execution Program Status Register (EPSR). Here’s a detailed breakdown of its components and their purposes:
+		/*
+		The xPSR (Program Status Register) is a critical register in ARM Cortex-M processors, including the Cortex-M7. 
+		It combines three separate status registers: the Application Program Status Register (APSR),
+		the Interrupt Program Status Register (IPSR), and the Execution Program Status Register (EPSR).
 
-Components of xPSR
-APSR (Application Program Status Register):
+		Components of xPSR
+		APSR (Application Program Status Register):
 
-N (Negative) Flag: Indicates that the result of the last arithmetic operation was negative.
-Z (Zero) Flag: Indicates that the result of the last arithmetic operation was zero.
-C (Carry) Flag: Indicates that the last arithmetic operation resulted in a carry or borrow.
-V (Overflow) Flag: Indicates that the last arithmetic operation resulted in an overflow.
-IPSR (Interrupt Program Status Register):
+		N (Negative) Flag: Indicates that the result of the last arithmetic operation was negative.
+		Z (Zero) Flag: Indicates that the result of the last arithmetic operation was zero.
+		C (Carry) Flag: Indicates that the last arithmetic operation resulted in a carry or borrow.
+		V (Overflow) Flag: Indicates that the last arithmetic operation resulted in an overflow.
+		IPSR (Interrupt Program Status Register):
 
-ISR Number: Contains the number of the current exception or interrupt being processed. If no interrupt is being processed, this field is zero.
-EPSR (Execution Program Status Register):
+		ISR Number: Contains the number of the current exception or interrupt being processed. If no interrupt is being processed, this field is zero.
+		EPSR (Execution Program Status Register):
 
-Thumb State Bit (T): Indicates the processor state. It should always be set to 1 in Cortex-M processors, indicating that the processor is executing Thumb instructions.
-ICI/IT (If-Then Execution State Bits): Control conditional execution of instructions within an IT (If-Then) block.
-*/
+		Thumb State Bit (T): Indicates the processor state. It should always be set to 1 in Cortex-M processors, indicating that the processor is executing Thumb instructions.
+		ICI/IT (If-Then Execution State Bits): Control conditional execution of instructions within an IT (If-Then) block.
+		*/
 		void* Port::pxPortInitialiseStack(void* pxTopOfStack, /*TaskFunction_t*/ std::uint32_t pxCode, void* pvParameters)
 		{
 			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
@@ -303,7 +296,7 @@ ICI/IT (If-Then Execution State Bits): Control conditional execution of instruct
 
 		/*Private functions*/
 
-		inline void Port::vTaskSwitchContext(void)
+		inline void Port::switchContext(void) const
 		{
 		}
 
