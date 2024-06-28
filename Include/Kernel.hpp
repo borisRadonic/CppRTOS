@@ -176,7 +176,7 @@ namespace CppRtos
 			return _port.isInsideInterrupt();
 		}
 
-		inline void selectHighestPriorityTask()
+		inline void selectHighestPriorityTask()  __attribute__((section("privileged_functions")))
 		{
 			//todo
 		}
