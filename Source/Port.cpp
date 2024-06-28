@@ -3,12 +3,20 @@
 #include "Kernel.hpp"
 
 
-	extern "C" void vPortSVCHandler( void );
-	extern "C" void xPortPendSVHandler( void );
+	void pendSVHandler(void) __attribute__((naked));
+	void SVCHandler( void )  __attribute__((naked));
+	
+	extern "C" void taskSwitchContext(void);
 
-
-
-
+	void taskSwitchContext()
+	{
+		/*call kernel function*/
+		Kernel* pKernel = KernelFactory::getInstance().getKernel();
+		if( kernell != nullptr )
+		{
+			kernel->selectHighestPriorityTask();
+		}	
+	}
 
 	
 
@@ -24,7 +32,7 @@
 	}
 
 
-	void vPortSVCHandler( void )
+	void SVCHandler( void )
 	{
 	    __asm volatile (
 	        "   ldr r3, pxCurrentTCBConst2      \n" /* Restore the context. */
@@ -42,62 +50,61 @@
 	        );
 	}
 
-	void pendSVHandler( void )
+	void pendSVHandler(void)
 	{
-		__asm volatile
-		(
-			"   mrs r0, psp                         \n" /*the current location of the psp (the stack that was in use prior to exception entry) is loaded into r0*/
-			"   isb                                 \n" /*Instruction Synchronization Barrier) flushes the instruction pipeline guaranteeing any instruction which follows will be re-fetched*/
-			"                                       \n"
-			"   ldr r3, pxCurrentTCBConst           \n" /* Get the location of the current TCB. */
-			"   ldr r2, [r3]                        \n" /*The value of pxCurrentTCB gets loaded into r2*/
-			"                                       \n"
-			"   tst r14, #0x10                      \n" /* Is the task using the FPU context?  If so, push high vfp registers. */
-			"   it eq                               \n"
-			"   vstmdbeq r0!, {s16-s31}             \n" /* As soon as an FPU instruction is used an additional 132 bytes will be pushed on the stack*/
-			"                                       \n"
-			"   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
-			"   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
-			"                                       \n" /* First member of TCB structure points to the location of the last item placed on the tasks stack */
-			"   stmdb sp!, {r0, r3}                 \n"
-			"   mov r0, %0                          \n"
-			"   cpsid i                             \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
-			"   msr basepri, r0                     \n"
-			"   dsb                                 \n"
-			"   isb                                 \n"
-			"   cpsie i                             \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
-			"   bl vTaskSwitchContext               \n"
-			"   mov r0, #0                          \n"
-			"   msr basepri, r0                     \n" /*Enable all interrupts by resetting basepri to 0*/
-			"   ldmia sp!, {r0, r3}                 \n" /*The initial values of the argument registers (r0-r3) are restored by popping them off the stack*/
-			"                                       \n"
-			"   ldr r1, [r3]                        \n" /* The first item in pxCurrentTCB is the task top of stack. */
-			"   ldr r0, [r1]                        \n"
-			"                                       \n"
-			"   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
-			"                                       \n"
-			"   tst r14, #0x10                      \n" /* Is the task using the FPU context?  If so, pop the high vfp registers too. */
-			"   it eq                               \n"
-			"   vldmiaeq r0!, {s16-s31}             \n"
-			"                                       \n"
-			"   msr psp, r0                         \n"
-			"   isb                                 \n"
-			"                                       \n"
-			#ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
-				#if WORKAROUND_PMU_CM001 == 1
-					"           push { r14 }                \n"
-					"           pop { pc }                  \n"
-				#endif
-			#endif
-			"                                       \n"
-			"   bx r14                              \n"
-			"                                       \n"
-			"   .align 4                            \n"
-			"pxCurrentTCBConst: .word pxCurrentTCB  \n"
-			::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
-		);
+	    __asm volatile
+	    (
+	    "   mrs r0, psp                         \n"
+	    "   isb                                 \n"
+	    "                                       \n"
+	    "   ldr r3, currentTaskDataAddr         \n" /* Get the location of the currentTaskData variable. */
+	    "   ldr r2, [r3]                        \n"
+	    "                                       \n"
+	    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
+	    "   it eq                               \n"
+	    "   vstmdbeq r0!, {s16-s31}             \n"
+	    "                                       \n"
+	    "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
+	    "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
+	    "                                       \n"
+	    "   stmdb sp!, {r0, r3}                 \n"
+	    "   mov r0, %0                          \n"
+	    "   cpsid i                             \n" /* Errata workaround. */
+	    "   msr basepri, r0                     \n"
+	    "   dsb                                 \n"
+	    "   isb                                 \n"
+	    "   cpsie i                             \n" /* Errata workaround. */
+	    "   bl taskSwitchContext                \n"
+	    "   mov r0, #0                          \n"
+	    "   msr basepri, r0                     \n"
+	    "   ldmia sp!, {r0, r3}                 \n"
+	    "                                       \n"
+	    "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
+	    "   ldr r0, [r1]                        \n"
+	    "                                       \n"
+	    "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
+	    "                                       \n"
+	    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
+	    "   it eq                               \n"
+	    "   vldmiaeq r0!, {s16-s31}             \n"
+	    "                                       \n"
+	    "   msr psp, r0                         \n"
+	    "   isb                                 \n"
+	    "                                       \n"
+	    #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
+	        #if WORKAROUND_PMU_CM001 == 1
+	    "           push { r14 }                \n"
+	    "           pop { pc }                  \n"
+	        #endif
+	    #endif
+	    "                                       \n"
+	    "   bx r14                              \n"
+	    "                                       \n"
+	    "   .align 4                            \n"
+	    "currentTaskDataAddr: .word currentTaskData\n"
+	    :: "i" (configMAX_SYSCALL_INTERRUPT_PRIORITY)
+	    );
 	}
-
 
 
 namespace CppRtos
