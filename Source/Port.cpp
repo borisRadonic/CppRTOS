@@ -5,8 +5,8 @@
 
 	void pendSVHandler(void) __attribute__((naked));
 	void SVCHandler( void )  __attribute__((naked));
-	
-	extern "C" void taskSwitchContext(void);
+
+	extern "C" void taskSwitchContext(void) __attribute__((section("privileged_functions")));;
 
 	void taskSwitchContext()
 	{
@@ -16,19 +16,6 @@
 		{
 			kernel->selectHighestPriorityTask();
 		}	
-	}
-
-	
-
-	volatile void *pxCurrentTCB  = nullptr;
-
-	extern "C" void vTaskSwitchContext(void) __attribute__((section("privileged_functions")));
-
-
-	void vTaskSwitchContext()
-	{
-		int a = 0;
-		a++;
 	}
 
 
