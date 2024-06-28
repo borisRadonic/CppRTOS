@@ -48,14 +48,14 @@ namespace CppRtos
             :  _state( KernelState::eReset )
 			, _lastError( KernelError::eOK )			
 			, _taskCount (0u)
-        {
+        	{
 			_tasks.fill(nullptr);
 
 			this->addTask( _idleTask );
 			_currentTask = _idleTask.getTaskData();
 
 			//Add Timer Task
-        }
+        	}
 
 		~Kernel()
 		{
@@ -68,37 +68,37 @@ namespace CppRtos
 
 
     public:
-        template<std::size_t STACK_SIZE>
-        void addTask( Task<STACK_SIZE>& task )
-        {
-        	if( _taskCount < Settings::MAX_TASKS )
-        	{
-        		TaskData* ptrTaskData = task.getTaskData();
-        		ptrTaskData->setId( _taskCount );
-        		_tasks[_taskCount] = ptrTaskData;
-        		_taskCount++;
-
-        		//add task to the Ready List
-        		_port.enterCritical();
-
-				_readyTasks.enqueue( ptrTaskData );
-
-        		_port.exitCritical();
-
-        	}
-        }
+	        template<std::size_t STACK_SIZE>
+	        void addTask( Task<STACK_SIZE>& task )
+	        {
+	        	if( _taskCount < Settings::MAX_TASKS )
+	        	{
+	        		TaskData* ptrTaskData = task.getTaskData();
+	        		ptrTaskData->setId( _taskCount );
+	        		_tasks[_taskCount] = ptrTaskData;
+	        		_taskCount++;
+	
+	        		//add task to the Ready List
+	        		_port.enterCritical();
+	
+					_readyTasks.enqueue( ptrTaskData );
+	
+	        		_port.exitCritical();
+	
+	        	}
+	        }
 
 		TaskData* getCurrentTask() const
 		{
 			return _currentTask;
 		}
 
-        const char* getVersion()
-        {
-        	return KernelVersion;
-        }
+	        const char* getVersion()
+	        {
+	        	return KernelVersion;
+	        }
 
-        void initialize()
+        	void initialize()
 		{
 			_state = KernelState::eReady;
 		}
@@ -112,43 +112,43 @@ namespace CppRtos
 			}
 		}
 
-        void lock()
+        	void lock()
 		{
 			//todo
 			_state = KernelState::eLocked;
 		}
 
-        void unLock()
+        	void unLock()
 		{
 			//todo
 			//_state = KernelState::eRunning; ???
 		}
 
-        void suspend()
+        	void suspend()
 		{
 		//todo
 			_state = KernelState::eSuspended;
 		}
 
-        inline void incrementTickCount()
+        	inline void incrementTickCount()
 		{
 			_port.incrementTickCount();
 		}
 
-        inline void incrementSysTimerCount()
+        	inline void incrementSysTimerCount()
 		{
 			_port.incrementSysTimerCount();
 		}
 
-        inline std::uint64_t getTickCount() const
-        {
-        	return _port.getTickCount();
-        }
+        	inline std::uint64_t getTickCount() const
+        	{
+        		return _port.getTickCount();
+        	}
 
-        inline std::uint64_t getSysTimerCount() const
-        {
-        	return _port.getSysTimerCount();
-        }
+	        inline std::uint64_t getSysTimerCount() const
+	        {
+	        	return _port.getSysTimerCount();
+	        }
 
 		inline void disableInterrupts()
 		{
@@ -176,6 +176,11 @@ namespace CppRtos
 			return _port.isInsideInterrupt();
 		}
 
+		inline void selectHighestPriorityTask()
+		{
+			//todo
+		}
+
 
     private:
 
@@ -185,11 +190,11 @@ namespace CppRtos
       
         std::array<TaskData*, Settings::MAX_TASKS> _tasks;
 
-		Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
+	Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
 
-		TaskData* _currentTask = nullptr;
+	TaskData* _currentTask = nullptr;
 
-		IdleTask _idleTask;
+	IdleTask _idleTask;
 
         std::size_t _taskCount = 0u;  // Current count of added tasks
 
