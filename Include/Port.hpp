@@ -235,17 +235,11 @@ namespace CppRtos
 
  			std::uint64_t 	_tickCount = 0u;
 
-        	std::uint64_t 	_sysTimerCount = 0u;
+        		std::uint64_t 	_sysTimerCount = 0u;
 
 			std::uint32_t _nestingCounter = 0u;
 
-			inline std::size_t getCurrentTCB(void);
-
 			ARMCM7 _cpu;
-
-
-
-
 
 		};
 	}
