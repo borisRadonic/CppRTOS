@@ -301,18 +301,5 @@ namespace CppRtos
 		}
 
 
-		/*Private functions*/
-
-		inline void Port::switchContext(void) const
-		{
-		}
-
-		inline std::size_t Port::getCurrentTCB(void)
-		{
-			/*get cureent TCB*/
-
-			return 0U;
-		}
-
 	}
 }
