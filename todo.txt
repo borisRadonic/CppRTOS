@@ -1,0 +1,548 @@
+
+
+
+
+
+CMakePresets.json
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "test_config_common",
+            "description": "Common settings for all test configurations",
+            "hidden": true,
+            "cacheVariables": {
+                "LOCAL_UNIT_TESTS": "ON",
+                "LINTING": "OFF"
+            }
+        },
+      
+        {
+            "name": "test_config_VS2022",
+            "description": "Visual Studio 2022 configuration for tests",
+            "inherits": "test_config_common",
+            "generator": "Visual Studio 17 2022",
+            "binaryDir": "${sourceDir}/build/UnitTestVS"
+        },
+
+        {
+            "name": "test_config_debug_make",
+            "description": "Unix makefiles debug configuration for tests",
+            "inherits": "test_config_common",
+            "generator": "Unix Makefiles",
+            "toolchainFile": "host_gcc.cmake",
+            "binaryDir": "${sourceDir}/build/UnitTest/Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+
+        {
+            "name": "make_debug_linting",
+            "displayName": "CubeIDE Make Debug with Linting",
+            "generator": "Unix Makefiles",
+            "binaryDir": "build/Debug",
+            "toolchainFile": "cubeide-gcc.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+
+        {
+            "name": "make_debug_no_lint",
+            "displayName": "CubeIDE Make Debug no Linting",
+            "generator": "Unix Makefiles",
+            "binaryDir": "build/Debug",
+            "toolchainFile": "cubeide-gcc.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LINTING" : "OFF"
+            }
+        },
+
+        {
+            "name": "make_debug_no_lint_sysview",
+            "displayName": "CubeIDE Make Debug no Linting with Sysview",
+            "generator": "Unix Makefiles",
+            "binaryDir": "build/Debug",
+            "toolchainFile": "cubeide-gcc.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "LINTING" : "OFF",
+                "SYSVIEW" : "ON"
+            }
+        },
+
+        {
+            "name": "make_release",
+            "displayName": "CubeIDE Make Release",
+            "generator": "Unix Makefiles",
+            "binaryDir": "build/Release",
+            "toolchainFile": "cubeide-gcc.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ],
+      
+    "buildPresets": [
+        {
+            "name": "test_build_debug_VS2022",
+            "configurePreset": "test_config_VS2022",
+            "configuration": "Debug",
+            "jobs": 8
+        },
+
+        {
+            "name": "test_build_debug_make",
+            "configurePreset": "test_config_debug_make",
+            "jobs": 8
+        }
+    ]
+}
+
+
+host_gcc.cmake
+# CMake toolchain definition based on STM32CubeIDE
+# loaded by project() call
+
+# do not set CMAKE_SYSTEM_NAME as this will set CMAKE_CROSSCOMPILING to true
+# set(CMAKE_SYSTEM_NAME "Windows" CACHE STRING "")
+
+# Specify toolchain. User must ensure compatible setting (via PATH).  
+set(TOOLCHAIN_PREFIX   "")
+set(CMAKE_C_COMPILER   "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_PREFIX}g++")
+set(CMAKE_AR           "${TOOLCHAIN_PREFIX}ar")
+set(CMAKE_LINKER       "{TOOLCHAIN_PREFIX}ld")
+set(CMAKE_OBJCOPY      "${TOOLCHAIN_PREFIX}objcopy")
+set(CMAKE_OBJDUMP     "${TOOLCHAIN_PREFIX}objdump")
+set(CMAKE_RANLIB       "${TOOLCHAIN_PREFIX}ranlib")
+set(CMAKE_SIZE         "${TOOLCHAIN_PREFIX}size")
+set(CMAKE_STRIP        "${TOOLCHAIN_PREFIX}ld")
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+
+cubeide-gcc.cmake
+# CMake toolchain definition based on STM32CubeIDE
+# loaded by project() call
+
+set(CMAKE_SYSTEM_PROCESSOR "arm" CACHE STRING "")
+set(CMAKE_SYSTEM_NAME "Generic" CACHE STRING "")
+
+# Skip link step during toolchain validation (CMake internal check)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+# Specify toolchain. User must ensure compatible setting (via PATH).  
+set(TOOLCHAIN_PREFIX   "arm-none-eabi-")
+set(CMAKE_C_COMPILER   "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_ASM_COMPILER "${TOOLCHAIN_PREFIX}gcc")
+set(CMAKE_CXX_COMPILER "${TOOLCHAIN_PREFIX}g++")
+set(CMAKE_AR           "${TOOLCHAIN_PREFIX}ar")
+set(CMAKE_LINKER       "{TOOLCHAIN_PREFIX}ld")
+set(CMAKE_OBJCOPY      "${TOOLCHAIN_PREFIX}objcopy")
+set(CMAKE_OBJDUMP     "${TOOLCHAIN_PREFIX}objdump")
+set(CMAKE_RANLIB       "${TOOLCHAIN_PREFIX}ranlib")
+set(CMAKE_SIZE         "${TOOLCHAIN_PREFIX}size")
+set(CMAKE_STRIP        "${TOOLCHAIN_PREFIX}ld")
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+
+###################### CONSTANTS ######################################
+set(MCPU_CORTEX_M0				        "-mcpu=cortex-m0")
+set(MCPU_CORTEX_M0PLUS				    "-mcpu=cortex-m0plus")
+set(MCPU_CORTEX_M3				        "-mcpu=cortex-m3")
+set(MCPU_CORTEX_M4				        "-mcpu=cortex-m4")
+set(MCPU_CORTEX_M7				        "-mcpu=cortex-m7")
+set(MCPU_CORTEX_M33				        "-mcpu=cortex-m33")
+set(MFPU_FPV4_SP_D16                    "-mfpu=fpv4-sp-d16")
+set(MFPU_FPV5_D16                       "-mfpu=fpv5-d16")
+set(RUNTIME_LIBRARY_REDUCED_C           "--specs=nano.specs")
+set(RUNTIME_LIBRARY_STD_C               "")
+set(RUNTIME_LIBRARY_SYSCALLS_MINIMAL    "--specs=nosys.specs")
+set(RUNTIME_LIBRARY_SYSCALLS_NONE       "")
+set(MFLOAT_ABI_SOFTWARE                 "-mfloat-abi=soft")
+set(MFLOAT_ABI_HARDWARE                 "-mfloat-abi=hard")
+set(MFLOAT_ABI_MIX                      "-mfloat-abi=softfp")
+
+
+###################### VARIABLES ######################################
+set(LINKER_SCRIPT              "${PROJECT_SOURCE_DIR}/STM32F765IIKX_FLASH.ld")
+set(MCPU                       ${MCPU_CORTEX_M7})
+set(MFPU                       ${MFPU_FPV5_D16})
+set(MFLOAT_ABI                 ${MFLOAT_ABI_HARDWARE})
+set(RUNTIME_LIBRARY            ${RUNTIME_LIBRARY_REDUCED_C})
+set(RUNTIME_LIBRARY_SYSCALLS   ${RUNTIME_LIBRARY_SYSCALLS_MINIMAL})
+
+
+###################### COMPILER FLAGS #################################
+## Default Compiler/Asembler/Linker Flags ##
+# see end of file of description
+set(warningOpts     "-Wall")
+set(machineOpts     "${MCPU} ${MFPU} ${MFLOAT_ABI} -mthumb")
+set(languageCOpts   "-std=gnu11")
+set(languageCXXOpts "-std=gnu++17")
+set(extraOptim      "-ffunction-sections -fdata-sections")
+set(extraOptimCXX   "-fno-rtti -fno-use-cxa-atexit")
+set(codeGenOpts     "-fno-exceptions")
+set(devOpts         "-fstack-usage -fcyclomatic-complexity")
+# set(linkTimeOptim   "-flto")
+
+set(CMAKE_C_FLAGS_INIT   "${machineOpts} ${languageCOpts} ${RUNTIME_LIBRARY} ${extraOptim} ${warningOpts} ${devOpts}")
+set(CMAKE_CXX_FLAGS_INIT "${machineOpts} ${languageCXXOpts} ${RUNTIME_LIBRARY} ${extraOptim} ${codeGenOpts} ${extraOptimCXX} ${warningOpts} ${devOpts}")
+set(CMAKE_ASM_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} -x assembler-with-cpp")
+
+set(CMAKE_EXE_LINKER_FLAGS_INIT "-T${LINKER_SCRIPT} ${RUNTIME_LIBRARY_SYSCALLS} -u_printf_float -u_scanf_float -Wl,-Map=${PROJECT_NAME}.map -Wl,--gc-sections -static -Wl,--start-group -lc -lm -lstdc++ -lsupc++ -Wl,--end-group")
+
+
+######################  CONFIGURATION FLAGS ###########################
+# The following does not work as desired when using the _INIT version in toolchain files
+# because CMake will prepend with its default values whenn project() is called
+# therefore, here the default setting is provided using cache variables
+# The CMake default does use -g instead of -g3 for debug, otherwise things would match
+# TODO: check if the CMake default is not sofficient (-g2). Setting the non-_INIT version here is bad practise (-Os available as config MINSIZEREL)
+
+# No optimization for Debug
+set(CMAKE_C_FLAGS_DEBUG    "-g3 -O0 -DDEBUG" CACHE STRING "C debug flags")
+set(CMAKE_CXX_FLAGS_DEBUG  "-g3 -O0 -DDEBUG" CACHE STRING "CXX debug flags")
+set(CMAKE_ASM_FLAGS_DEBUG  "-g3 -O0 -DDEBUG" CACHE STRING "ASM debug flags")
+
+# Optimize on size for Release
+set(CMAKE_C_FLAGS_RELEASE      "-Os -DNDEBUG" CACHE STRING "C release flags")
+set(CMAKE_CXX_FLAGS_RELEASE    "-Os -DNDEBUG" CACHE STRING "CXX release flags")
+set(CMAKE_ASM_FLAGS_RELEASE    "-Os -DNDEBUG" CACHE STRING "ASM release flags")
+
+
+###################### FLAG DESCRIPTION (GCC) ########################
+# You can mix options and other arguments. For the most part, the order you use doesn’t matter. Order does matter when you use several options of the same kind;
+#
+#   Machine dependent options (https://gcc.gnu.org/onlinedocs/gcc/Submodel-Options.html)
+#   -mcpu           This specifies the name of the target ARM processor.  target ARM architecture (as if specified by -march) and the ARM processor type for which to tune for performance
+#   -mfpu           This specifies what floating-point hardware (or hardware emulation) is available on the target.
+#   -mfloat-abi     Specifies which floating-point ABI to use. Permissible values are: ‘soft’, ‘softfp’ and ‘hard’.
+#   -mthumb         Select generating code that executes in Thumb states.
+#
+#   -specs          Process file after the compiler reads in the standard specs file, in order to override the defaults which the gcc driver program uses when determining what switches to pass to cc1, cc1plus, as, ld, etc. More than one -specs=file can be specified on the command line, and they are processed in order, from left to right. https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html
+#   -std            Determine the language standard. https://gcc.gnu.org/onlinedocs/gcc/C-Dialect-Options.html
+#
+#   Options to Request or Suppress Warnings (https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html)
+#   -Wall           This enables all the warnings about constructions that some users consider questionable
+#   -Wextra         This enables some extra warning flags that are not enabled by -Wall
+#   -Werror         Make the specified warning into an error. 
+#
+#
+#   Options for linking (https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html)
+#   -llibray        Search the library named library when linking
+#   -T script       Use script as the linker script. 
+#   -static         On systems that support dynamic linking, this overrides -pie and prevents linking with the shared libraries.
+#   -Wl,option      Pass option as an option to the linker. If option contains commas, it is split into multiple options at the commas. You can use this syntax to pass an argument to the option. For example, -Wl,-Map,output.map passes -Map output.map to the linker. When using the GNU linker, you can also get the same effect with -Wl,-Map=output.map.
+#
+#   Options for Debugging Your Program (https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html)
+#   -g              Produce debugging information in the operating system’s native format (stabs, COFF, XCOFF, or DWARF). GDB can work with this debugging information.
+#   -glevel         Request debugging information and also use level to specify how much information. The default level is 2.
+#               If you use multiple -g options, with or without level numbers, the last such option is the one that is effective.
+#
+#   Options That Control Optimization (https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html)
+#   -O0             Reduce compilation time and make debugging produce the expected results. This is the default.
+#   -O1             Optimize. Optimizing compilation takes somewhat more time, and a lot more memory for a large function.
+#   -O2             Optimize even more.
+#   -O3             Optimize yet more. 
+#   -Os             Optimize for size. -Os enables all -O2 optimizations except those that often increase code size.
+#           If you use multiple -O options, with or without level numbers, the last such option is the one that is effective.
+#
+#           Options of the form -fflag specify machine-independent flags. Most flags have both positive and negative forms;
+#           the negative form of -ffoo is -fno-foo. 
+#   -ffunction-sections 
+#   -fdata-sections         Place each function or data item into its own section in the output file if the target supports arbitrary sections.
+#                           Together with a linker garbage collection (linker --gc-sections option) these options may lead to smaller statically-linked executables (after stripping).
+#                           On ELF/DWARF systems these options do not degenerate the quality of the debug information. There could be issues with other object files/debug info formats.
+#
+#           The compiler performs optimization based on the knowledge it has of the program.
+#           Compiling multiple files at once to a single output file mode allows the compiler to use information gained from all of the files when compiling each of them.
+#           # TODO: check how much better the optimization would be if everything is compiled at once
+#
+#   Option for the ld linker itself (https://www.man7.org/linux/man-pages/man1/ld.1.html)
+#   --start-group archives --end-group      The archives should be a list of archive files. They may be either explicit file names, or `-l' options. The specified archives are searched repeatedly until no new undefined references are created.
+#   -Map=mapfile                            Print a link map to the file mapfile.
+#   -gc-sections                            Enable garbage collection of unused input sections.
+#
+#   Options Controlling the Kind of Output (https://gcc.gnu.org/onlinedocs/gcc/Overall-Options.html)
+#   -x language     Specify explicitly the language for the following input files (rather than letting the compiler choose a default based on the file name suffix). This option applies to all following input files until the next -x option.
+#
+#   Developer Options (https://gcc.gnu.org/onlinedocs/gcc/Developer-Options.html)
+#   -fstack-usage               Makes the compiler output stack usage information for the program, on a per-function basis.
+#
+#   -fcyclomatic-complexity --> this is not available for C, it's used for ADA
+#
+#   Options Controlling C++ Dialect (https://gcc.gnu.org/onlinedocs/gcc/C_002b_002b-Dialect-Options.html)
+#   -fno-rtti               Disable generation of information about every class with virtual functions for use by the C++ run-time type identification features (dynamic_cast and typeid). 
+#   -fno-use-cxa-atexit     NO VERSION OF: Register destructors for objects with static storage duration with the __cxa_atexit function rather than the atexit function.
+#                                          This option is required for fully standards-compliant handling of static destructors,
+#                                          but only works if your C library supports __cxa_atexit.
+#
+#   Options for Code Generation Conventions (https://gcc.gnu.org/onlinedocs/gcc/Code-Gen-Options.html)
+#   -fno-exceptions         NO VERSION OF: Enable exception handling. Generates extra code needed to propagate exceptions.
+
+
+
+tasks.json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build all",
+            "group": "build",
+            "type": "shell",
+            "command": "cmake --build build/Debug --parallel 14",
+            //"args": ["--build build/Debug", "--parallel 14"]
+        },
+    ]
+}
+
+
+
+settings.json
+{
+    "cortex-debug.gdbPath": "C:/DEV/arm-compiler-for-stm-uc/tools/bin/arm-none-eabi-gdb",
+    "cortex-debug.JLinkGDBServerPath": "C:\\DEV\\Segger\\JLink\\JLinkGDBServerCL",
+    "cortex-debug.stutilPath": "C:\\DEV\\TOOLS\\stlink-1.7.0-x86_64-w64-mingw32\\bin\\st-util",
+    "C_Cpp.errorSquiggles": "disabled",
+    "terminal.integrated.env.windows": {
+        "CC": "C:\\DEV\\arm-compiler-for-stm-uc\\tools\\bin\\arm-none-eabi-gcc.exe",
+        "CXX": "C:\\DEV\\arm-compiler-for-stm-uc\\tools\\bin\\arm-none-eabi-g++.exe",
+        "ASM": "C:\\DEV\\arm-compiler-for-stm-uc\\tools\\bin\\arm-none-eabi-gcc.exe"
+    },
+    "files.associations": {
+        "any": "cpp",
+        "array": "cpp",
+        "atomic": "cpp",
+        "bit": "cpp",
+        "*.tcc": "cpp",
+        "cctype": "cpp",
+        "charconv": "cpp",
+        "chrono": "cpp",
+        "clocale": "cpp",
+        "cmath": "cpp",
+        "codecvt": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "condition_variable": "cpp",
+        "cstdarg": "cpp",
+        "cstddef": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "cstring": "cpp",
+        "ctime": "cpp",
+        "cwchar": "cpp",
+        "cwctype": "cpp",
+        "deque": "cpp",
+        "map": "cpp",
+        "set": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "exception": "cpp",
+        "algorithm": "cpp",
+        "functional": "cpp",
+        "iterator": "cpp",
+        "memory": "cpp",
+        "memory_resource": "cpp",
+        "numeric": "cpp",
+        "optional": "cpp",
+        "random": "cpp",
+        "ratio": "cpp",
+        "string_view": "cpp",
+        "system_error": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "fstream": "cpp",
+        "initializer_list": "cpp",
+        "iomanip": "cpp",
+        "iosfwd": "cpp",
+        "iostream": "cpp",
+        "istream": "cpp",
+        "limits": "cpp",
+        "mutex": "cpp",
+        "new": "cpp",
+        "numbers": "cpp",
+        "ostream": "cpp",
+        "semaphore": "cpp",
+        "sstream": "cpp",
+        "stdexcept": "cpp",
+        "stop_token": "cpp",
+        "streambuf": "cpp",
+        "thread": "cpp",
+        "typeinfo": "cpp",
+        "variant": "cpp"
+    },
+    "C_Cpp.clang_format_style": "Visual Studio"
+}
+
+
+launch.json
+// Configure debug launch settings
+// Feel free to copy these and modify them for your debugger and MCU
+{
+    "version": "0.2.0",
+    "projectName": "Vinci CSD",
+    "configurations": [
+        {
+            "name": "JLink Debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/build/Debug/VinciCSD.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "jlink",
+            "device": "STM32F765II",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+            "preLaunchTask": "Build all", // configured in tasks.json
+            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
+            /* SVD Files: See https://gitlab.bucherhydraulics.com/bhcsd/vinci-platform/cmsis-svd-files*/
+            "svdFile": "C:/DEV/TOOLS/cmsis-svd-files/STMicroelectronics_CMSIS_SVD/STM32F765.svd", // Include svd to watch device peripherals
+            "swoConfig":
+            {
+                "enabled": true,
+                "cpuFrequency": 168000000,
+                "swoFrequency": 4000000,
+                "source": "probe",
+                "decoders":
+                [
+                    {
+                        "label": "ITM port 0 output",
+                        "type": "console",
+                        "port": 0,
+                        "showOnStartup": true,
+                        "encoding": "ascii"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "JLink Attach",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/build/Debug/VinciCSD.elf",
+            "request": "attach",
+            "type": "cortex-debug",
+            "servertype": "jlink",
+            "device": "STM32F765II",
+            "interface": "swd",
+            "runToEntryPoint": "main", // will be ignored by attach mode
+            "preLaunchTask": "Build all", // configured in tasks.json
+            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
+            "svdFile": "", // Include svd to watch device peripherals
+            "swoConfig":
+            {
+                "enabled": true,
+                "cpuFrequency": 168000000,
+                "swoFrequency": 4000000,
+                "source": "probe",
+                "decoders":
+                [
+                    {
+                        "label": "ITM port 0 output",
+                        "type": "console",
+                        "port": 0,
+                        "showOnStartup": true,
+                        "encoding": "ascii"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "STlink Debug",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/build/Debug/VinciCSD.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "stutil",
+            "device": "STM32F765II",
+            "interface": "swd",
+            "runToEntryPoint": "main",
+            "preLaunchTask": "Build all", // configured in tasks.json
+            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
+            /* SVD Files: See https://gitlab.bucherhydraulics.com/bhcsd/vinci-platform/cmsis-svd-files*/
+            "svdFile": "C:/DEV/TOOLS/cmsis-svd-files/STMicroelectronics_CMSIS_SVD/STM32F765.svd", // Include svd to watch device peripherals
+            "swoConfig": {} // currently (v1.7.0) not supported
+        },
+        {
+            "name": "STlink Attach",
+            "cwd": "${workspaceRoot}",
+            "executable": "${workspaceRoot}/build/Debug/VinciCSD.elf",
+            "request": "attach",
+            "type": "cortex-debug",
+            "servertype": "stutil",
+            "device": "STM32F765II",
+            "interface": "swd",
+            "runToEntryPoint": "main", // will be ignored by attach mode
+            "preLaunchTask": "Build all", // configured in tasks.json
+            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
+            "svdFile": "", // Include svd to watch device peripherals
+            "swoConfig": {} // currently (v1.7.0) not supported
+        },
+    ]
+}
+
+
+
+
+c_cpp_properties.json
+"configurations": [
+        {
+            "name": "STM32_ARM",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/vinci/",
+                "${workspaceFolder}/vinci/app/",
+                "${workspaceFolder}/vinci/app/inc/",
+                "${workspaceFolder}/vinci/dsl/",
+                //"${workspaceFolder}/vinci/dsl/inc", // TODO: include that folder when it exists
+                "${workspaceFolder}/vinci/esl/",
+                "${workspaceFolder}/vinci/esl/inc/",
+                "${workspaceFolder}/vinci/hal/",
+                "${workspaceFolder}/vinci/hal/inc/",
+                "${workspaceFolder}/vinci/platform/",
+                "${workspaceFolder}/vinci/platform/inc/",
+                "${workspaceFolder}/vinci/OSAL/",
+                "${workspaceFolder}/vinci/OSAL/FreeRTOS/",
+                "${workspaceFolder}/Core/",
+                "${workspaceFolder}/Core/Inc/",
+                "${workspaceFolder}/Drivers/",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F7xx/Include/",
+                "${workspaceFolder}/SIMULINK/",
+                "${workspaceFolder}/Support/",
+                "${workspaceFolder}/lib/CanPie/source/",
+                "${workspaceFolder}/lib/CanPie/source/device/st/stm32f7xx/",
+                "${workspaceFolder}/lib/CanPie/source/canpie-fd",
+                "${workspaceFolder}/lib/CanPie/source/hal/",
+                "${workspaceFolder}/lib/CanPie/source/misc/",
+                // compiler include paths:                                                                  Compiler can be found here: https://gitlab.bucherhydraulics.com/bhcsd/vinci-platform/arm-compiler-for-stm-uc
+                "C:/DEV/TOOLS/arm-compiler-for-stm-uc/tools/arm-none-eabi/include",
+                "C:/DEV/TOOLS/arm-compiler-for-stm-uc/tools/lib/gcc/arm-none-eabi/11.3.1/include"
+                
+            ],
+            "browse": {
+                "path":["${workspaceRoot}"]
+            },
+            "defines": ["FREE_RTOS", "HELAX", "ENABLE_CLI", "CLI_RS232", "ENABLE_NVM_MANAGER", "DISABLE_SIMULATED_PLATFORM"],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm",
+            "compilerPath": "C:/DEV/TOOLS/arm-compiler-for-stm-uc/tools/bin/arm-none-eabi-g++.exe"
+        }
+    ],
+    "version": 4
+}
