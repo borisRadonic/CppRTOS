@@ -25,17 +25,17 @@ namespace CppRtos
             {
         	    _buffer[_tail] = item;
 	            _tail = (_tail + 1) % MAX_ITEMS;
-        	    ++_size;
+	            _size.fetch_add(1);
 	        }
         }
 
         inline T dequeue()
         {
-            if (size > 0)
+            if (_size > 0)
  	        {
-        	    T item = buffer[_head];
+        	    T item = _buffer[_head];
 	            _head = (_head + 1) % MAX_ITEMS;
-        	    --size;
+	            _size.fetch_sub(1);
         	    return item;
             }
 		    return nullptr;
@@ -45,7 +45,7 @@ namespace CppRtos
         {
             if( index < MAX_ITEMS )
             {
-                return buffer[i];
+                return _buffer[index];
             }
             return nullptr;
         }
@@ -79,6 +79,6 @@ namespace CppRtos
         std::array<T, MAX_ITEMS> _buffer = {};
         std::size_t _head = 0u;
         std::size_t _tail = 0u;
-        std::size_t _size = 0u;
+        std::atomic<std::size_t> _size = 0u;
     };
 }

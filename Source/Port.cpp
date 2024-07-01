@@ -3,94 +3,114 @@
 #include "Kernel.hpp"
 
 
-	void pendSVHandler(void) __attribute__((naked));
-	void SVCHandler( void )  __attribute__((naked));
+	extern "C" void pendSVHandler(void);
+	extern "C" void SVCHandler( void );
 
-	extern "C" void taskSwitchContext(void) __attribute__((section("privileged_functions")));;
+	extern "C" void taskSwitchContext(void) __attribute__((section("privileged_functions")));
 
 	void taskSwitchContext()
 	{
 		/*call kernel function*/
-		Kernel* pKernel = KernelFactory::getInstance().getKernel();
-		if( kernell != nullptr )
+		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		if( pKernel != nullptr )
 		{
-			kernel->selectHighestPriorityTask();
+			pKernel->selectHighestPriorityTask();
 		}	
 	}
 
 
+	std::uint32_t currentTaskDataAddr = 0;
+
+
+	union ConvertVoidPtrUin32
+	{
+		void* dataVoid;
+		std::uint32_t uint32;
+	};
+
+
 	void SVCHandler( void )
 	{
-	    __asm volatile (
-	        "   ldr r3, pxCurrentTCBConst2      \n" /* Restore the context. */
-	        "   ldr r1, [r3]                    \n" /* Use pxCurrentTCBConst to get the pxCurrentTCB address. */
-	        "   ldr r0, [r1]                    \n" /* The first item in pxCurrentTCB is the task top of stack. */
-	        "   ldmia r0!, {r4-r11, r14}        \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count. */
-	        "   msr psp, r0                     \n" /* Restore the task stack pointer. */
-	        "   isb                             \n"
-	        "   mov r0, #0                      \n"
-	        "   msr basepri, r0                 \n"
-	        "   bx r14                          \n"
-	        "                                   \n"
-	        "   .align 4                        \n"
-	        "pxCurrentTCBConst2: .word pxCurrentTCB             \n"
-	        );
+		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		ConvertVoidPtrUin32 convert;
+		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
+		currentTaskDataAddr = convert.uint32;
+
+		 __asm volatile (
+		        "   ldr r3, =currentTaskDataAddr       \n" /* Load address of currentTaskDataAddr */
+		        "   ldr r1, [r3]                       \n" /* Use currentTaskDataAddr to get the current task data address */
+		        "   ldr r0, [r1]                       \n" /* The first item in the current task data is the task top of stack */
+		        "   ldmia r0!, {r4-r6, r8-r11, r14}    \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count */
+		        "   msr psp, r0                        \n" /* Restore the task stack pointer */
+		        "   isb                                \n"
+		        "   mov r0, #0                         \n"
+		        "   msr basepri, r0                    \n"
+		        "   bx r14                             \n"
+		        :
+		        :
+		        : "r0", "r1", "r3", "r4", "r5", "r6", "r8", "r9", "r10", "r11", "r14"
+		    );
 	}
+
 
 	void pendSVHandler(void)
 	{
-	    __asm volatile
-	    (
-	    "   mrs r0, psp                         \n"
-	    "   isb                                 \n"
-	    "                                       \n"
-	    "   ldr r3, currentTaskDataAddr         \n" /* Get the location of the currentTaskData variable. */
-	    "   ldr r2, [r3]                        \n"
-	    "                                       \n"
-	    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
-	    "   it eq                               \n"
-	    "   vstmdbeq r0!, {s16-s31}             \n"
-	    "                                       \n"
-	    "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
-	    "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
-	    "                                       \n"
-	    "   stmdb sp!, {r0, r3}                 \n"
-	    "   mov r0, %0                          \n"
-	    "   cpsid i                             \n" /* Errata workaround. */
-	    "   msr basepri, r0                     \n"
-	    "   dsb                                 \n"
-	    "   isb                                 \n"
-	    "   cpsie i                             \n" /* Errata workaround. */
-	    "   bl taskSwitchContext                \n"
-	    "   mov r0, #0                          \n"
-	    "   msr basepri, r0                     \n"
-	    "   ldmia sp!, {r0, r3}                 \n"
-	    "                                       \n"
-	    "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
-	    "   ldr r0, [r1]                        \n"
-	    "                                       \n"
-	    "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
-	    "                                       \n"
-	    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
-	    "   it eq                               \n"
-	    "   vldmiaeq r0!, {s16-s31}             \n"
-	    "                                       \n"
-	    "   msr psp, r0                         \n"
-	    "   isb                                 \n"
-	    "                                       \n"
-	    #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
-	        #if WORKAROUND_PMU_CM001 == 1
-	    "           push { r14 }                \n"
-	    "           pop { pc }                  \n"
-	        #endif
-	    #endif
-	    "                                       \n"
-	    "   bx r14                              \n"
-	    "                                       \n"
-	    "   .align 4                            \n"
-	    "currentTaskDataAddr: .word currentTaskData\n"
-	    :: "i" (configMAX_SYSCALL_INTERRUPT_PRIORITY)
-	    );
+		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		ConvertVoidPtrUin32 convert;
+		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
+		currentTaskDataAddr = convert.uint32;
+
+		__asm volatile
+		    (
+		    "   mrs r0, psp                         \n"
+		    "   isb                                 \n"
+		    "                                       \n"
+		    "   ldr r3, [%0]                        \n" /* Get the location of the currentTaskData variable. */
+		    "   ldr r2, [r3]                        \n"
+		    "                                       \n"
+		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
+		    "   it eq                               \n"
+		    "   vstmdbeq r0!, {s16-s31}             \n"
+		    "                                       \n"
+		    "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
+		    "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
+		    "                                       \n"
+		    "   stmdb sp!, {r0, r3}                 \n"
+		    "   mov r0, %1                          \n"
+		    "   cpsid i                             \n" /* Errata workaround. */
+		    "   msr basepri, r0                     \n"
+		    "   dsb                                 \n"
+		    "   isb                                 \n"
+		    "   cpsie i                             \n" /* Errata workaround. */
+		    "   bl taskSwitchContext                \n"
+		    "   mov r0, #0                          \n"
+		    "   msr basepri, r0                     \n"
+		    "   ldmia sp!, {r0, r3}                 \n"
+		    "                                       \n"
+		    "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
+		    "   ldr r0, [r1]                        \n"
+		    "                                       \n"
+		    "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
+		    "                                       \n"
+		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
+		    "   it eq                               \n"
+		    "   vldmiaeq r0!, {s16-s31}             \n"
+		    "                                       \n"
+		    "   msr psp, r0                         \n"
+		    "   isb                                 \n"
+		    "                                       \n"
+		    #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
+		        #if WORKAROUND_PMU_CM001 == 1
+		    "           push { r14 }                \n"
+		    "           pop { pc }                  \n"
+		        #endif
+		    #endif
+		    "                                       \n"
+		    "   bx r14                              \n"
+		    : // Outputs
+		    : "r" (&currentTaskDataAddr), "i" (MAX_SYSCALL_INTERRUPT_PRIORITY) // Inputs
+		    : "r0", "r1", "r2", "r3", "r14" // Clobbered registers
+		    );
 	}
 
 
@@ -120,7 +140,7 @@ namespace CppRtos
 			__asm volatile
 			(
 				"   mrs %0, basepri                                         \n" \
-				"   mov %1, %2                                              \n" \	
+				"   mov %1, %2                                              \n" \
 				"   cpsid i                                                 \n" \
 				"   msr basepri, %1                                         \n" \
 				"   isb                                                     \n" \
@@ -231,11 +251,14 @@ namespace CppRtos
 			);
 		}
 
-		void Port::taskExitError(void)  const
+		void Port::taskExitError(void)
 		{
 			disableInterrupts();
 			while( true) {};
 		}
+
+
+
 
 		/*
 		The xPSR (Program Status Register) is a critical register in ARM Cortex-M processors, including the Cortex-M7. 
@@ -257,34 +280,49 @@ namespace CppRtos
 		Thumb State Bit (T): Indicates the processor state. It should always be set to 1 in Cortex-M processors, indicating that the processor is executing Thumb instructions.
 		ICI/IT (If-Then Execution State Bits): Control conditional execution of instructions within an IT (If-Then) block.
 		*/
-		void* Port::pxPortInitialiseStack(void* pxTopOfStack, /*TaskFunction_t*/ std::uint32_t pxCode, void* pvParameters)
+		void* Port::initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters)
 		{
 			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
 
-			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
-			 pxTopOfStack--;
+			 std::uint32_t* topOfStack = static_cast<std::uint32_t*>(pxTopOfStack);
 
-			 *pxTopOfStack = 0x01000000;   /* xPSR: Set the Thumb state bit (T bit) */
-			 pxTopOfStack--;
+			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
+			 topOfStack--;
+
+			 *topOfStack = 0x01000000;   /* xPSR: Set the Thumb state bit (T bit) */
+			 topOfStack--;
 
 			/* Adress Mask 0xfffffffeUL For strict compliance with the Cortex-M spec the task start
    			address should have bit-0 clear, as it is loaded into the PC on exit from an ISR. */
 
 			
-			 *pxTopOfStack = ( ( StackType_t ) pxCode ) & 0xfffffffeUL; /* PC */
-			 pxTopOfStack--;
+			 *topOfStack = (taskFunction & 0xfffffffeUL); /* PC */
+			 topOfStack--;
+
+			 void (Port::*funcPtr)() = &Port::taskExitError;
+
+		     // Convert the member function pointer to uintptr_t
+
+
+			 FunctionPointerUnion funcUnion;
+			 funcUnion.taskExitError = funcPtr;
+
+			// Get the integer representation of the function pointer
+			uint32_t funcPtrInt32 = funcUnion.uintRepresentation;
+
+
 
 			/*Return Address*/
-			 *pxTopOfStack = ( StackType_t ) prvTaskExitError;             /* LR */
+			 *topOfStack = funcPtrInt32;             /* LR */
    		       
-			 pxTopOfStack -= 5;                            /* R12, R3, R2 and R1. */
-			 *pxTopOfStack = ( StackType_t ) pvParameters; /* R0 */
+			 topOfStack -= 5;                            /* R12, R3, R2 and R1. */
+			// *topOfStack = ( StackType_t ) pvParameters; /* R0 */
 
-			 pxTopOfStack--;
-			 *pxTopOfStack = pvParameters; /* R0: Argument - return value*/
+			 topOfStack--;
+			// *pxTopOfStack = static_cast<std::uint32_t*>(pvParameters); /* R0: Argument - return value*/
 
-			 pxTopOfStack -= 8; /* R11, R10, R9, R8, R7, R6, R5 and R4. */
-			 return pxTopOfStack;
+			 topOfStack -= 8; /* R11, R10, R9, R8, R7, R6, R5 and R4. */
+			 return static_cast<void*>(topOfStack);
 		}
 
 

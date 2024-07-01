@@ -14,7 +14,7 @@
 namespace CppRtos
 {
 
-	std::uint32_t WAIT_FOREVER = 0xFFFFFFFF;
+	constexpr std::uint32_t WAIT_FOREVER = 0xFFFFFFFF;
 	
 	enum class KernelState : std::uint8_t
 	{
@@ -25,8 +25,6 @@ namespace CppRtos
 		eSuspended = 4u,
 		eError = 0xFFu
 	};
-
-	const char* KernelVersion = "1.1";
 
 
 	enum class KernelError : std::uint32_t
@@ -93,12 +91,8 @@ namespace CppRtos
 			return _currentTask;
 		}
 
-	        const char* getVersion()
-	        {
-	        	return KernelVersion;
-	        }
 
-        	void initialize()
+        void initialize()
 		{
 			_state = KernelState::eReady;
 		}
@@ -168,7 +162,6 @@ namespace CppRtos
 		inline void switchContext()
 		{
 			/*TODO: Implement logic here...*/
-			_port.switchContext();
 		}
 
 		inline bool isInsideInterrupt( void ) const
@@ -176,7 +169,7 @@ namespace CppRtos
 			return _port.isInsideInterrupt();
 		}
 
-		inline void selectHighestPriorityTask()  __attribute__((section("privileged_functions")))
+		inline void selectHighestPriorityTask()
 		{
 			//todo
 		}
@@ -203,7 +196,7 @@ namespace CppRtos
     };
 
 
-    std::aligned_storage_t<sizeof(Kernel)> buffer;
+
 
 	class KernelFactory
 	{

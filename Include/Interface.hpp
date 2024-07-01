@@ -14,9 +14,9 @@ public:
 
 	virtual void enableInterrupts( void )  const = 0;
 
-	virtual void enterCritical(void)  const = 0;
+	virtual void enterCritical(void) = 0;
 
-	virtual void exitCritical(void)  const = 0;
+	virtual void exitCritical(void) = 0;
 
 	virtual void memoryBarrier( void ) const = 0;
 
@@ -32,11 +32,10 @@ public:
 
 	virtual void enableVFP(void)  const = 0;
 
-	virtual void taskExitError(void)  const = 0;
+	virtual void taskExitError(void) = 0;
 
-	virtual void* pxPortInitialiseStack(void* pxTopOfStack, /*TaskFunction_t*/ std::uint32_t pxCode, void* pvParameters) = 0;
+	virtual void* initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters) = 0;
 
-	virtual void switchContext(void) const = 0;
 
 };
 

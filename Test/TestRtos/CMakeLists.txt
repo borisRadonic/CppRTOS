@@ -27,7 +27,7 @@ include_directories(${CMSIS_PATH} ${DEVICE_PATH})
 ###################### VARIABLES ######################################
 set(PROJECT_NAME "TestRtos")
 set(PROJECT_TYPE "exe")
-set(LINKER_SCRIPT "../STM32H750VBTX_FLASH.ld")
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32H750VBTX_FLASH.ld)
 
 set(PROJECT_SOURCES
     Startup/startup_stm32h750vbtx.s

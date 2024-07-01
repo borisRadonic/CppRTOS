@@ -9,6 +9,7 @@ namespace CppRtos
 	namespace Port
 	{
 
+
 	/*ARM Cortex-M7*/
 
 	/*NVIC (Nested Vectored Interrupt Controller):
@@ -122,6 +123,13 @@ namespace CppRtos
 		{
 		public:
 
+
+			union FunctionPointerUnion
+			{
+			    void (Port::*taskExitError)();
+			    std::uint32_t uintRepresentation;
+			};
+
 			Port()
 			 :_tickCount ( 0u )
 			 , _sysTimerCount( 0u )
@@ -140,7 +148,8 @@ namespace CppRtos
 			inline void yield() const
 			{
 				 // Set a PendSV to request a context switch.
-				NVIC_INT_CTRL_REG |= NVIC_PENDSVSET_BIT;
+				//NVIC_INT_CTRL_REG |= NVIC_PENDSVSET_BIT;
+				//NVIC_ICSR ??
 		        __asm volatile ( "dsb" ::: "memory" );
 		        __asm volatile ( "isb" );
 			}
@@ -155,17 +164,17 @@ namespace CppRtos
 				vSetBASEPRI(0u);
 			}
 
-			inline void enterCritical(void)  const override
+			inline void enterCritical(void)  override
 			{
 				_nestingCounter++;
 				raiseGetBASEPRI(); //disable interrupts
 			}
 
-			inline void exitCritical(void) const override
+			inline void exitCritical(void) override
 			{
 				if( _nestingCounter != 0 )
 				{
-					assert( _nestingCounter != 0)
+					//assert( _nestingCounter != 0)
 					while(true) {};
 				}
 				
@@ -213,11 +222,10 @@ namespace CppRtos
 
 			void enableVFP(void) const override;
 
-			void taskExitError(void) const override;
+			void taskExitError(void) override;
 
-			void* pxPortInitialiseStack(void* pxTopOfStack, /*TaskFunction_t*/ std::uint32_t pxCode, void* pvParameters) override;
+			void* initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters) override;
 
-			void switchContext(void) const override;
 
 		private:
 

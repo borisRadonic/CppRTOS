@@ -1,0 +1,25 @@
+{
+"configurations": [
+        {
+            "name": "STM32_ARM",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/Drivers/",
+                "${workspaceFolder}/Sources/",
+                "${workspaceFolder}/Startup/",
+                "C:/DevTools/Arm-GNU-Toolchain-arm-none-eabi/13.2/arm-none-eabi/include",
+                "C:/DevTools/Arm-GNU-Toolchain-arm-none-eabi/13.2/lib/gcc/arm-none-eabi/13.2.1/include"
+                
+            ],
+            "browse": {
+                "path":["${workspaceRoot}"]
+            },
+            "defines": ["RTOS_CPP", "BORIS"],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm",
+            "compilerPath": "C:/DevTools/Arm-GNU-Toolchain-arm-none-eabi/13.2/bin/arm-none-eabi-g++.exe"
+        }
+    ],
+    "version": 4
+}

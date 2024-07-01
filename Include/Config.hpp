@@ -19,3 +19,4 @@ namespace CppRtos
 		constexpr std::uint32_t TICK_RATE_HZ = 1000u;
 	}
 }
+
