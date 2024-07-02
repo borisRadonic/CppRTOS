@@ -3,7 +3,10 @@
         {
             "name": "STM32_ARM",
             "includePath": [
-                "${workspaceFolder}/**",
+                "${workspaceFolder}/**",                
+                "${workspaceFolder}/../../Source/**",
+                "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Include/*.*",
+                "${workspaceFolder}/../../Include/**",
                 "${workspaceFolder}/Drivers/",
                 "${workspaceFolder}/Sources/",
                 "${workspaceFolder}/Startup/",
@@ -12,7 +15,7 @@
                 
             ],
             "browse": {
-                "path":["${workspaceRoot}"]
+                "path":["${workspaceRoot}", "${workspaceFolder}/Drivers/STM32H7xx_HAL_Driver/Src/*.*"]
             },
             "defines": ["RTOS_CPP", "BORIS"],
             "cStandard": "c17",

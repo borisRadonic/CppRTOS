@@ -175,7 +175,7 @@ namespace CppRtos
 				if( _nestingCounter != 0 )
 				{
 					//assert( _nestingCounter != 0)
-					while(true) {};
+					//while(true) {};
 				}
 				
 				_nestingCounter--;

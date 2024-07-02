@@ -2,6 +2,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(TestRtos C CXX ASM)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -18,22 +21,27 @@ set(RUNTIME_LIBRARY_SYSCALLS_FLAGS "--specs=nosys.specs")
 # Define the path to the CMSIS and device headers
 set(CMSIS_PATH "Drivers/CMSIS/Include")
 set(DEVICE_PATH "Drivers/CMSIS/Device/ST/STM32H7xx/Include")
+set(HAL_PATH "Drivers/STM32H7xx_HAL_Driver/Inc")
 
 # Add include directories
 include_directories(${CMSIS_PATH} ${DEVICE_PATH})
 
 #######################################################################
 
-###################### VARIABLES ######################################
-set(PROJECT_NAME "TestRtos")
-set(PROJECT_TYPE "exe")
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32H750VBTX_FLASH.ld)
+
 
 set(PROJECT_SOURCES
-    Startup/startup_stm32h750vbtx.s
+    Startup/startup_stm32h750xbhx.s
     Sources/main.cpp
     Sources/syscalls.c
     Sources/sysmem.c
+    Sources/system_stm32h7xx.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c
+    Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c
     ../../Source/Port.cpp
 )
 
@@ -43,7 +51,9 @@ set(PROJECT_DEFINES
 
 set(PROJECT_INCLUDES
     ../../Include
-     ${CMSIS_PATH}
+    Inc
+    ${HAL_PATH}
+    ${CMSIS_PATH}
     ${DEVICE_PATH}
 )
 #######################################################################

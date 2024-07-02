@@ -7,8 +7,8 @@
         "CC": "C:\\DevTools\\Arm-GNU-Toolchain-arm-none-eabi\\13.2\\bin\\arm-none-eabi-gcc.exe",
         "CXX": "C:\\DevTools\\Arm-GNU-Toolchain-arm-none-eabi\\13.2\\bin\\arm-none-eabi-g++.exe",
         "ASM": "C:\\DevTools\\Arm-GNU-Toolchain-arm-none-eabi\\13.2\\bin\\arm-none-eabi-gcc.exe"
-},
-"files.associations": {
+    },
+    "files.associations": {
         "any": "cpp",
         "array": "cpp",
         "atomic": "cpp",
@@ -71,8 +71,9 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "typeinfo": "cpp",
-        "variant": "cpp"
-    },    
+        "variant": "cpp",
+        "stm32h7xx_hal.h": "c"
+    },
     "editor.fontSize": 14,
     "editor.lineHeight": 22,
     "workbench.colorTheme": "Default Dark+",

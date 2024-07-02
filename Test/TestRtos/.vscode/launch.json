@@ -1,38 +1,45 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
+    "version": "2.0.0",
     "projectName": "CppRTOS ",
     "configurations": [
-            {
+        {
             "name": "STlink Debug",
-            "cwd": "${workspaceRoot}",
-            "executable": "${workspaceRoot}/build/Debug/TestRtos.elf",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
             "request": "launch",
             "type": "cortex-debug",
-            "servertype": "stutil",
+            "servertype": "external",
+            "serverpath": "C:/Program Files (x86)/STMicroelectronics/STM32CubeIDE_1.7.0/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_1.7.0/tools/bin/ST-LINK_gdbserver.bat",
+            "gdbTarget": "localhost:61234",
             "device": "STM32F765II",
             "interface": "swd",
-            "runToEntryPoint": "main",
+            "runToEntryPoint": "SystemInit",
             "preLaunchTask": "Build all", // configured in tasks.json
             "svdFile": "C:/DevTools/cmsis/STMicroelectronics_CMSIS_SVD/STM32F765.svd", // Include svd to watch device peripherals
-            "swoConfig": {} // currently (v1.7.0) not supported
+            "swoConfig": {},
+            "showDevDebugOutput": "raw",
         },
         {
             "name": "STlink Attach",
-            "cwd": "${workspaceRoot}",
-            "executable": "${workspaceRoot}/build/Debug/TestRtos.elf",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
             "request": "attach",
             "type": "cortex-debug",
-            "servertype": "stutil",
+            "servertype": "external",
+            "serverpath": "C:/ST/STM32CubeIDE_1.13.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550/tools/bin/ST-LINK_gdbserver.bat",
+            "serverargs": [
+                "--port",
+                "50000",
+                "--no-reset"
+            ],
+            "gdbTarget": "localhost:61234",
             "device": "STM32F765II",
             "interface": "swd",
-            "runToEntryPoint": "main", // will be ignored by attach mode
-            "preLaunchTask": "Build all", // configured in tasks.json
-            // "preLaunchCommands": ["Build all"], // you can execute command instead of task
-            "svdFile": "", // Include svd to watch device peripherals
-            "swoConfig": {} // currently (v1.7.0) not supported
-        },
+            "runToEntryPoint": "SystemInit",
+            "preLaunchTask": "CMake: Build",
+            "svdFile": "",
+            "swoConfig": {},
+            "showDevDebugOutput": "raw"
+        }
     ]
 }

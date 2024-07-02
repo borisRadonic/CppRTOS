@@ -1,6 +1,6 @@
 #include "../Include/Port.hpp"
 #include "../Include/Config.hpp"
-#include "Kernel.hpp"
+#include "../Include/Kernel.hpp"
 
 
 	extern "C" void pendSVHandler(void);
@@ -157,7 +157,7 @@ namespace CppRtos
 			SYSTICK_CURRENT_VALUE_REG 	= 0U; // Reset the current value of the SysTick counter to 0
 		
 		 	// Configure SysTick
-			SYSTICK_LOAD_REG =  ((CPU_CLOCK_HZ / Settings::TICK_RATE_HZ ) - 1u);
+		//	SYSTICK_LOAD_REG =  ((CPU_CLOCK_HZ / Settings::TICK_RATE_HZ ) - 1u);
 
 			// Internal Clock, Enable SysTick Interrupt and Enable the SysTick counter
 		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
