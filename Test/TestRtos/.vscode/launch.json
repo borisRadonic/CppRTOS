@@ -8,38 +8,34 @@
             "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
             "request": "launch",
             "type": "cortex-debug",
-            "servertype": "external",
-            "serverpath": "C:/Program Files (x86)/STMicroelectronics/STM32CubeIDE_1.7.0/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_1.7.0/tools/bin/ST-LINK_gdbserver.bat",
-            "gdbTarget": "localhost:61234",
+            "servertype": "stlink",
+            //"gdbPath": "C:\\path\\to\\your\\gdb\\bin\\arm-none-eabi-gdb.exe",
+            "serverpath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550\\tools\\bin\\ST-LINK_gdbserver.exe",
+            "gdbTarget": "localhost:50000",
             "device": "STM32F765II",
             "interface": "swd",
             "runToEntryPoint": "SystemInit",
-            "preLaunchTask": "Build all", // configured in tasks.json
-            "svdFile": "C:/DevTools/cmsis/STMicroelectronics_CMSIS_SVD/STM32F765.svd", // Include svd to watch device peripherals
+            "preLaunchTask": "Build all",
+            "svdFile": "C:/DevTools/cmsis/STMicroelectronics_CMSIS_SVD/STM32F765.svd",
             "swoConfig": {},
-            "showDevDebugOutput": "raw",
-        },
-        {
-            "name": "STlink Attach",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
-            "request": "attach",
-            "type": "cortex-debug",
-            "servertype": "external",
-            "serverpath": "C:/ST/STM32CubeIDE_1.13.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550/tools/bin/ST-LINK_gdbserver.bat",
-            "serverargs": [
-                "--port",
-                "50000",
-                "--no-reset"
-            ],
-            "gdbTarget": "localhost:61234",
-            "device": "STM32F765II",
-            "interface": "swd",
-            "runToEntryPoint": "SystemInit",
-            "preLaunchTask": "CMake: Build",
-            "svdFile": "",
-            "swoConfig": {},
-            "showDevDebugOutput": "raw"
-        }
-    ]
+            "showDevDebugOutput": "raw"        
+    },
+    {
+        "name": "STlink Attach",
+        "cwd": "${workspaceFolder}",
+        "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
+        "request": "attach",
+        "type": "cortex-debug",
+        "servertype": "stlink",
+        "serverpath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550\\tools\\bin\\ST-LINK_gdbserver.exe",
+        "gdbTarget": "localhost:61234",
+        "device": "STM32F765II",
+        "interface": "swd",
+        "runToEntryPoint": "SystemInit",
+        "preLaunchTask": "CMake: Build",
+        "svdFile": "",
+        "swoConfig": {},
+        "showDevDebugOutput": "raw"
+    }
+]
 }

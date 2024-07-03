@@ -151,13 +151,16 @@ namespace CppRtos
 			return origBasePri;
 		}
 
+
+extern "C" uint32_t SystemCoreClock;
+
 		void Port::setupTimerInterrupt( void ) const
 		{
 			SYSTICK_CTRL_REG 			= 0U; // Stop SysTick.
 			SYSTICK_CURRENT_VALUE_REG 	= 0U; // Reset the current value of the SysTick counter to 0
 		
 		 	// Configure SysTick
-		//	SYSTICK_LOAD_REG =  ((CPU_CLOCK_HZ / Settings::TICK_RATE_HZ ) - 1u);
+			SYSTICK_LOAD_REG =  ((SystemCoreClock / Settings::TICK_RATE_HZ ) - 1u);
 
 			// Internal Clock, Enable SysTick Interrupt and Enable the SysTick counter
 		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
@@ -194,7 +197,7 @@ namespace CppRtos
 			this->setupTimerInterrupt();
 
 			// Enable VFP
-			this->enableVFP();
+			//this->enableVFP();
 
 		 /* Lazy save always. */
 			// *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;

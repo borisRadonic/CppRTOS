@@ -1,6 +1,6 @@
 {
     "cortex-debug.gdbPath": "C:\\DevTools\\Arm-GNU-Toolchain-arm-none-eabi\\13.2\\bin\\arm-none-eabi-gdb.exe",
-    "cortex-debug.stutilPath": "C:\\DEV\\TOOLS\\stlink-1.7.0-x86_64-w64-mingw32\\bin\\st-util",
+    "cortex-debug.stutilPath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.win32_2.1.0.202305091550\\tools\\bin\\",
     "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.clang_format_style": "Visual Studio",
     "terminal.integrated.env.windows": {

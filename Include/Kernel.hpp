@@ -99,6 +99,7 @@ namespace CppRtos
 
 		void start()
 		{
+			initialize();
 			assert( _state == KernelState::eReady );
 			if( _state == KernelState::eReady)
 			{
@@ -106,7 +107,8 @@ namespace CppRtos
 			}
 		}
 
-        	void lock()
+
+        void lock()
 		{
 			//todo
 			_state = KernelState::eLocked;
