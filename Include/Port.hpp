@@ -214,7 +214,7 @@ namespace CppRtos
 
 			void validateInterruptPriority(void) const override;
 
-			void startScheduler(void) const override;
+			void startScheduler(void) override;
 
 			void endScheduler(void) const override;
 
@@ -224,7 +224,7 @@ namespace CppRtos
 
 			void taskExitError(void) override;
 
-			void* initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters) override;
+			void* initialiseStack(void* pxTopOfStack, std::function<void()> taskFunction, void* pvParameters) override;
 
 
 		private:
@@ -249,6 +249,7 @@ namespace CppRtos
 
 			ARMCM7 _cpu;
 
+			void setPrivilegedMode(void);
 		};
 	}
 }

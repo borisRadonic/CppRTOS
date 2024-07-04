@@ -135,7 +135,7 @@ a++;
 
 	SystemClock_Config();
 
-	//FPU_init();
+	FPU_init();
 
 	CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
 	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
@@ -146,7 +146,11 @@ a++;
 	task1.setPriority(50);
 	task1.setName( taskName1);
 
-	ptrKernel->addTask(task1);
+
+   std::function<void()> taskFunction;
+	taskFunction = std::bind(&Task1::run, task1);
+
+	ptrKernel->addTask(task1, taskFunction);
 
 	ptrKernel->start();
 

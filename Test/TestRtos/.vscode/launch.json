@@ -18,7 +18,8 @@
             "preLaunchTask": "Build all",
             "svdFile": "C:/DevTools/cmsis/STMicroelectronics_CMSIS_SVD/STM32F765.svd",
             "swoConfig": {},
-            "showDevDebugOutput": "raw"        
+            "showDevDebugOutput": "raw"
+           
     },
     {
         "name": "STlink Attach",
@@ -27,8 +28,9 @@
         "request": "attach",
         "type": "cortex-debug",
         "servertype": "stlink",
+        //"gdbPath": "C:\\path\\to\\your\\gdb\\bin\\arm-none-eabi-gdb.exe",
         "serverpath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550\\tools\\bin\\ST-LINK_gdbserver.exe",
-        "gdbTarget": "localhost:61234",
+        "gdbTarget": "localhost:50000",
         "device": "STM32F765II",
         "interface": "swd",
         "runToEntryPoint": "SystemInit",

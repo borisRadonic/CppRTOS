@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <functional>
 
 class IPort
 {
@@ -24,7 +25,7 @@ public:
 
 	virtual void validateInterruptPriority(void) const = 0;
 
-	virtual void startScheduler(void)  const = 0;
+	virtual void startScheduler(void) = 0;
 
 	virtual void endScheduler(void)  const = 0;
 
@@ -34,7 +35,7 @@ public:
 
 	virtual void taskExitError(void) = 0;
 
-	virtual void* initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters) = 0;
+	virtual void* initialiseStack(void* pxTopOfStack, std::function<void()> taskFunction, void* pvParameters) = 0;
 
 
 };

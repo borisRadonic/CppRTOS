@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <array>
 #include <assert.h>
+#include <functional>
 
 #include "Task.hpp"
 #include "Port.hpp"
@@ -36,6 +37,7 @@ namespace CppRtos
 		eLocked 		= 4u
 	};
     
+	
 
     class Kernel final
     {
@@ -49,7 +51,11 @@ namespace CppRtos
         	{
 			_tasks.fill(nullptr);
 
-			this->addTask( _idleTask );
+ 			using MemberFunctionType = void(IdleTask::*)();
+    		MemberFunctionType memberFunctionPointer = &IdleTask::run;
+
+			auto idleTaskFunction = std::bind(&IdleTask::run, &_idleTask);
+			this->addTask( _idleTask, idleTaskFunction );
 			_currentTask = _idleTask.getTaskData();
 
 			//Add Timer Task
@@ -67,7 +73,7 @@ namespace CppRtos
 
     public:
 	        template<std::size_t STACK_SIZE>
-	        void addTask( Task<STACK_SIZE>& task )
+	        void addTask( Task<STACK_SIZE>& task,  std::function<void()> taskFunction )
 	        {
 	        	if( _taskCount < Settings::MAX_TASKS )
 	        	{
@@ -78,7 +84,10 @@ namespace CppRtos
 	
 	        		//add task to the Ready List
 	        		_port.enterCritical();
-	
+									
+					StackAddr pStack = _port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), taskFunction, nullptr );
+					ptrTaskData->setCurrentStackPtr( pStack );
+
 					_readyTasks.enqueue( ptrTaskData );
 	
 	        		_port.exitCritical();
@@ -136,15 +145,15 @@ namespace CppRtos
 			_port.incrementSysTimerCount();
 		}
 
-        	inline std::uint64_t getTickCount() const
-        	{
-        		return _port.getTickCount();
-        	}
+		inline std::uint64_t getTickCount() const
+		{
+			return _port.getTickCount();
+		}
 
-	        inline std::uint64_t getSysTimerCount() const
-	        {
-	        	return _port.getSysTimerCount();
-	        }
+		inline std::uint64_t getSysTimerCount() const
+		{
+			return _port.getSysTimerCount();
+		}
 
 		inline void disableInterrupts()
 		{
@@ -185,13 +194,14 @@ namespace CppRtos
       
         std::array<TaskData*, Settings::MAX_TASKS> _tasks;
 
-	Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
+		Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
 
-	TaskData* _currentTask = nullptr;
+		TaskData* _currentTask = nullptr;
 
-	IdleTask _idleTask;
+		IdleTask _idleTask;
 
-        std::size_t _taskCount = 0u;  // Current count of added tasks
+				
+		std::size_t _taskCount = 0u;  // Current count of added tasks
 
         Port::Port _port;
 
@@ -238,7 +248,8 @@ namespace CppRtos
 				return nullptr;
 			}
 			_isCreated = true;
-			return new(platformMemory) Kernel();
+			_instance = new(platformMemory) Kernel();
+			return _instance;
 		}
 
 		void destroy( void* platformMemory )

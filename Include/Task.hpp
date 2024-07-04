@@ -22,7 +22,7 @@ namespace CppRtos
 	};
 
 
-	using StackAddr = std::size_t;
+	using StackAddr = void*;
        
 	class TaskData
 	{
@@ -30,7 +30,7 @@ namespace CppRtos
 	 public:
 
 		explicit TaskData()
-		: _topStack( 0u )
+		: _currentStackPointer( nullptr )
 		, _priority(0u)
 		, _basePriority (0u)
 		, _numOfHeldMutexes( 0u )
@@ -52,20 +52,26 @@ namespace CppRtos
 			_priority = _basePriority;
 		}
 
+
 		inline void setTopStack( const StackAddr topStack)
 		{
-			_topStack = topStack;
-			_endStack = _topStack;
+			_endStack = topStack;
+			_currentStackPointer = topStack; //at start
 		}
 
-		inline StackAddr getTopStackAddress() const
+		inline StackAddr getCurrentStackPtr() const
 		{
-			return _topStack;
+			return _currentStackPointer;
 		}
 
 		inline void setStartStack( const StackAddr startStack)
 		{
 			_startStack = startStack;
+		}
+
+		inline void setCurrentStackPtr( const StackAddr currentStack )
+		{
+			_currentStackPointer = currentStack;
 		}
 
 		inline StackAddr getStartStackddress() const
@@ -101,10 +107,10 @@ namespace CppRtos
 		}
 
 
-		inline void setRecordEndStackAddress()
-		{
-			_endStack = _topStack;
-		}
+		//inline void setRecordEndStackAddress()
+		//{
+		//	_endStack = _currentStackPointer;
+		//}
 
 		inline StackAddr getEndStackddress() const
 		{
@@ -139,7 +145,7 @@ namespace CppRtos
 		}
 
 	 protected:
-		StackAddr 		_topStack = 0u; /// Points to the top of the stack
+		StackAddr 		_currentStackPointer = 0u; 
 		std::uint32_t 	_priority = 0u;
 
         std::uint32_t 	_basePriority = 0u; // Used for mutexes by priority inheritance logic
@@ -160,6 +166,8 @@ namespace CppRtos
 
 	};
 
+
+
     template<std::size_t STACK_SIZE>
     class Task
     {
@@ -169,8 +177,9 @@ namespace CppRtos
         {
         	_stack.fill (0 );
         	std::size_t start =  reinterpret_cast<std::size_t>( _stack.data() );
-        	_data.setStartStack( start );
-        	_data.setTopStack( start + _stack.size() );
+        	_data.setStartStack( _stack.data() );
+        	_data.setTopStack( reinterpret_cast<void*>( start + _stack.size() ));
+			
         }
 
         virtual ~Task()
@@ -221,4 +230,5 @@ namespace CppRtos
         TaskData _data;
         std::array<std::uint8_t, STACK_SIZE> _stack = {};
     };
+
 }

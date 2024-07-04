@@ -3,8 +3,10 @@
 #include "../Include/Kernel.hpp"
 
 
-	extern "C" void pendSVHandler(void);
-	extern "C" void SVCHandler( void );
+
+	extern "C" void SVC_Handler( void );
+
+	extern "C" void PendSV_Handler( void );
 
 	extern "C" void taskSwitchContext(void) __attribute__((section("privileged_functions")));
 
@@ -29,88 +31,122 @@
 	};
 
 
-	void SVCHandler( void )
+	void SVC_Handler( void )
 	{
 		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
 		ConvertVoidPtrUin32 convert;
 		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
 		currentTaskDataAddr = convert.uint32;
 
-		 __asm volatile (
-		        "   ldr r3, =currentTaskDataAddr       \n" /* Load address of currentTaskDataAddr */
-		        "   ldr r1, [r3]                       \n" /* Use currentTaskDataAddr to get the current task data address */
-		        "   ldr r0, [r1]                       \n" /* The first item in the current task data is the task top of stack */
-		        "   ldmia r0!, {r4-r6, r8-r11, r14}    \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count */
-		        "   msr psp, r0                        \n" /* Restore the task stack pointer */
-		        "   isb                                \n"
-		        "   mov r0, #0                         \n"
-		        "   msr basepri, r0                    \n"
-		        "   bx r14                             \n"
-		        :
-		        :
-		        : "r0", "r1", "r3", "r4", "r5", "r6", "r8", "r9", "r10", "r11", "r14"
-		    );
-	}
-
-
-	void pendSVHandler(void)
-	{
-		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		ConvertVoidPtrUin32 convert;
-		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
-		currentTaskDataAddr = convert.uint32;
+	  	__asm volatile
+	   (
+        	"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
+	  	);
+        __asm volatile
+		(
+			"   ldr r1, [r3]                    \n" /* Use currentTaskDataAddr to get the current task data address. */
+		);
+        __asm volatile
+		(
+			"   ldr r0, [r1]                    \n" /* The first item in the current task data is the task top of stack. */
+		);
 
 		__asm volatile
-		    (
-		    "   mrs r0, psp                         \n"
-		    "   isb                                 \n"
-		    "                                       \n"
-		    "   ldr r3, [%0]                        \n" /* Get the location of the currentTaskData variable. */
-		    "   ldr r2, [r3]                        \n"
-		    "                                       \n"
-		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
-		    "   it eq                               \n"
-		    "   vstmdbeq r0!, {s16-s31}             \n"
-		    "                                       \n"
-		    "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
-		    "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
-		    "                                       \n"
-		    "   stmdb sp!, {r0, r3}                 \n"
-		    "   mov r0, %1                          \n"
-		    "   cpsid i                             \n" /* Errata workaround. */
-		    "   msr basepri, r0                     \n"
-		    "   dsb                                 \n"
-		    "   isb                                 \n"
-		    "   cpsie i                             \n" /* Errata workaround. */
-		    "   bl taskSwitchContext                \n"
-		    "   mov r0, #0                          \n"
-		    "   msr basepri, r0                     \n"
-		    "   ldmia sp!, {r0, r3}                 \n"
-		    "                                       \n"
-		    "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
-		    "   ldr r0, [r1]                        \n"
-		    "                                       \n"
-		    "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
-		    "                                       \n"
-		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
-		    "   it eq                               \n"
-		    "   vldmiaeq r0!, {s16-s31}             \n"
-		    "                                       \n"
-		    "   msr psp, r0                         \n"
-		    "   isb                                 \n"
-		    "                                       \n"
-		    #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
-		        #if WORKAROUND_PMU_CM001 == 1
-		    "           push { r14 }                \n"
-		    "           pop { pc }                  \n"
-		        #endif
-		    #endif
-		    "                                       \n"
-		    "   bx r14                              \n"
-		    : // Outputs
-		    : "r" (&currentTaskDataAddr), "i" (MAX_SYSCALL_INTERRUPT_PRIORITY) // Inputs
-		    : "r0", "r1", "r2", "r3", "r14" // Clobbered registers
-		    );
+		(
+        "   ldmia r0!, {r4-r11, r14}        \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count. */
+        "   msr psp, r0                     \n" /* Restore the task stack pointer. */
+        "   isb                             \n" /* Instruction Synchronization Barrier. */
+        "   mov r0, #0                      \n" /* Clear the BASEPRI register. */
+        "   msr basepri, r0                 \n" /* Restore interrupts. */
+		);
+		__asm volatile
+		(
+        "   bx r14                          \n" /* Return from the exception handler. */
+        "                                   \n"
+        "   .align 4                        \n"
+    	);
+
+	}
+
+	extern "C" void HardFault_Handler(void)
+	{
+		while (1);  // Infinite loop to catch HardFault
+	}
+
+	extern "C" void MemManage_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Memory Management Fault
+	}
+
+	extern "C" void BusFault_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Bus Fault
+	}
+
+	extern "C" void UsageFault_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Usage Fault
+	}
+
+	void PendSV_Handler(void) 
+	{
+		 while(1);
+		// CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		// ConvertVoidPtrUin32 convert;
+		// convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
+		// currentTaskDataAddr = convert.uint32;
+
+		// __asm volatile
+		//     (
+		//     "   mrs r0, psp                         \n"
+		//     "   isb                                 \n"
+		//     "                                       \n"
+		//     "   ldr r3, [%0]                        \n" /* Get the location of the currentTaskData variable. */
+		//     "   ldr r2, [r3]                        \n"
+		//     "                                       \n"
+		//     "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
+		//     "   it eq                               \n"
+		//     "   vstmdbeq r0!, {s16-s31}             \n"
+		//     "                                       \n"
+		//     "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
+		//     "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
+		//     "                                       \n"
+		//     "   stmdb sp!, {r0, r3}                 \n"
+		//     "   mov r0, %1                          \n"
+		//     "   cpsid i                             \n" /* Errata workaround. */
+		//     "   msr basepri, r0                     \n"
+		//     "   dsb                                 \n"
+		//     "   isb                                 \n"
+		//     "   cpsie i                             \n" /* Errata workaround. */
+		//     "   bl taskSwitchContext                \n"
+		//     "   mov r0, #0                          \n"
+		//     "   msr basepri, r0                     \n"
+		//     "   ldmia sp!, {r0, r3}                 \n"
+		//     "                                       \n"
+		//     "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
+		//     "   ldr r0, [r1]                        \n"
+		//     "                                       \n"
+		//     "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
+		//     "                                       \n"
+		//     "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
+		//     "   it eq                               \n"
+		//     "   vldmiaeq r0!, {s16-s31}             \n"
+		//     "                                       \n"
+		//     "   msr psp, r0                         \n"
+		//     "   isb                                 \n"
+		//     "                                       \n"
+		//     #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
+		//         #if WORKAROUND_PMU_CM001 == 1
+		//     "           push { r14 }                \n"
+		//     "           pop { pc }                  \n"
+		//         #endif
+		//     #endif
+		//     "                                       \n"
+		//     "   bx r14                              \n"
+		//     : // Outputs
+		//     : "r" (&currentTaskDataAddr), "i" (MAX_SYSCALL_INTERRUPT_PRIORITY) // Inputs
+		//     : "r0", "r1", "r2", "r3", "r14" // Clobbered registers
+		//     );
 	}
 
 
@@ -184,7 +220,7 @@ extern "C" uint32_t SystemCoreClock;
 		{
 		}
 
-		void Port::startScheduler(void) const
+		void Port::startScheduler(void)
 		{
 		 	// Make PendSV and SysTick the lowest priority interrupts
 			NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 16)) | NVIC_PENDSV_PRI;
@@ -196,6 +232,10 @@ extern "C" uint32_t SystemCoreClock;
 		 	// Start the timer for the tick ISR.
 			this->setupTimerInterrupt();
 
+			setPrivilegedMode();
+
+			//enableInterrupts();
+
 			// Enable VFP
 			//this->enableVFP();
 
@@ -203,6 +243,10 @@ extern "C" uint32_t SystemCoreClock;
 			// *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;
 
 		   /* Start the first task. */
+
+
+		   //SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
+
 			this->startFirstTask();
 
 
@@ -223,21 +267,23 @@ extern "C" uint32_t SystemCoreClock;
 
 		void Port::startFirstTask(void) const
 		{
-			__asm volatile (
-				" ldr r0, =0xE000ED08   \n" /* Use the NVIC offset register to locate the stack. */
-				" ldr r0, [r0]          \n"
-				" ldr r0, [r0]          \n"
-				" msr msp, r0           \n" /* Set the msp back to the start of the stack. */
-				" mov r0, #0            \n" /* Clear the bit that indicates the FPU is in use, see comment above. */
-				" msr control, r0       \n"
-				" cpsie i               \n" /* Globally enable interrupts. */
-				" cpsie f               \n"
-				" dsb                   \n"
-				" isb                   \n"
-				" svc 0                 \n" /* System call to start first task. */
-				" nop                   \n"
-				" .ltorg                \n"
-				);
+		__asm volatile (
+        " ldr r0, =0xE000ED08   \n" /* Load the address of the VTOR register. */
+        " ldr r0, [r0]          \n" /* Dereference to get the address of the vector table. */
+        " ldr r0, [r0]          \n" /* Dereference again to get the initial stack pointer value. */
+		);
+		__asm volatile (
+        " msr msp, r0           \n" /* Set the MSP back to the start of the stack. */
+        " mov r0, #0            \n" /* Clear the CONTROL register (set to privileged mode, use MSP). */
+        " msr control, r0       \n"
+        " cpsie i               \n" /* Enable interrupts. */
+        " cpsie f               \n" /* Enable fault interrupts. */
+        " dsb                   \n" /* Data Synchronization Barrier. */
+        " isb                   \n" /* Instruction Synchronization Barrier. */
+        " svc 0                 \n" /* System call to start first task. */
+        " nop                   \n" /* No operation (placeholder). */
+        " .ltorg                \n" /* Literal pool location directive. */
+    );
 		}
 
 		void Port::enableVFP(void)  const
@@ -261,7 +307,10 @@ extern "C" uint32_t SystemCoreClock;
 		}
 
 
+extern "C" void testFirstTask()
+{
 
+}
 
 		/*
 		The xPSR (Program Status Register) is a critical register in ARM Cortex-M processors, including the Cortex-M7. 
@@ -283,7 +332,7 @@ extern "C" uint32_t SystemCoreClock;
 		Thumb State Bit (T): Indicates the processor state. It should always be set to 1 in Cortex-M processors, indicating that the processor is executing Thumb instructions.
 		ICI/IT (If-Then Execution State Bits): Control conditional execution of instructions within an IT (If-Then) block.
 		*/
-		void* Port::initialiseStack(void* pxTopOfStack, std::uint32_t taskFunction, void* pvParameters)
+		void* Port::initialiseStack(void* pxTopOfStack, std::function<void()> taskFunction, void* pvParameters)
 		{
 			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
 
@@ -295,39 +344,83 @@ extern "C" uint32_t SystemCoreClock;
 			 *topOfStack = 0x01000000;   /* xPSR: Set the Thumb state bit (T bit) */
 			 topOfStack--;
 
+
 			/* Adress Mask 0xfffffffeUL For strict compliance with the Cortex-M spec the task start
    			address should have bit-0 clear, as it is loaded into the PC on exit from an ISR. */
 
-			
-			 *topOfStack = (taskFunction & 0xfffffffeUL); /* PC */
+
+
+
+			auto funcPtr1 = taskFunction.target<void(*)()>();
+
+
+ 			std::uint32_t* fp = static_cast<std::uint32_t*>(reinterpret_cast<void*>(*funcPtr1));
+
+			*topOfStack = *fp;
+
+			//*topOfStack = reinterpret_cast<std::uintptr_t>(*funcPtr1) & 0xfffffffeUL; // PC
+			//*topOfStack =  (uint32_t) testFirstTask & 0xfffffffeUL; // PC;
 			 topOfStack--;
 
 			 void (Port::*funcPtr)() = &Port::taskExitError;
-
 		     // Convert the member function pointer to uintptr_t
-
-
 			 FunctionPointerUnion funcUnion;
 			 funcUnion.taskExitError = funcPtr;
-
-			// Get the integer representation of the function pointer
+     		// Get the integer representation of the function pointer
 			uint32_t funcPtrInt32 = funcUnion.uintRepresentation;
 
-
-
 			/*Return Address*/
-			 *topOfStack = funcPtrInt32;             /* LR */
-   		       
-			 topOfStack -= 5;                            /* R12, R3, R2 and R1. */
-			// *topOfStack = ( StackType_t ) pvParameters; /* R0 */
-
+			 *topOfStack = funcPtrInt32;             /* LR */   		       
+			 topOfStack -= 5;                        /* skip R12, R3, R2 and R1. */
+			 //*topOfStack = static_cast<std::uint32_t>(static_cast<std::uint32_t*>(pvParameters)); /* R0: Argument - return value*/
+			*topOfStack = 0;
 			 topOfStack--;
-			// *pxTopOfStack = static_cast<std::uint32_t*>(pvParameters); /* R0: Argument - return value*/
 
-			 topOfStack -= 8; /* R11, R10, R9, R8, R7, R6, R5 and R4. */
+			 /*R11*/
+			 *topOfStack = 0xfffffffdu;
+			  topOfStack--;
+			 
+			 /*R10*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			 /*R9*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			 /*R8*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			 /*R7*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			 /*R6*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			/*R5*/
+			 *topOfStack = 0x00000000u;
+			 topOfStack--;
+
+			/*R4*/
+			 *topOfStack = 0x00000000u;
+			  topOfStack--;
 			 return static_cast<void*>(topOfStack);
 		}
 
 
+		void Port::setPrivilegedMode()
+		{
+			__asm volatile (
+				" mrs r0, control  \n" /* Read the current value of the CONTROL register */
+				" bic r0, r0, #1   \n" /* Clear the least significant bit to select privileged mode */
+				" msr control, r0  \n" /* Write the modified value back to the CONTROL register */
+				" isb              \n" /* Ensure the change takes effect immediately */
+			);
+		}
+
+	
 	}
 }
