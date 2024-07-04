@@ -146,11 +146,7 @@ a++;
 	task1.setPriority(50);
 	task1.setName( taskName1);
 
-
-   std::function<void()> taskFunction;
-	taskFunction = std::bind(&Task1::run, task1);
-
-	ptrKernel->addTask(task1, taskFunction);
+ 	ptrKernel->addTask(task1);
 
 	ptrKernel->start();
 

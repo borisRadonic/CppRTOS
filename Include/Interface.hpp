@@ -35,7 +35,7 @@ public:
 
 	virtual void taskExitError(void) = 0;
 
-	virtual void* initialiseStack(void* pxTopOfStack, std::function<void()> taskFunction, void* pvParameters) = 0;
+	virtual void* initialiseStack(void* pxTopOfStack, void* pvParameters) = 0;
 
 
 };

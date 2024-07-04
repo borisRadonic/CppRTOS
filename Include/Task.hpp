@@ -11,6 +11,8 @@
 namespace CppRtos
 {
 
+	class ITask;
+
 	constexpr std::uint32_t MAX_TASK_NAME = 16u;
 
 	enum class TaskStateType : std::uint8_t
@@ -73,6 +75,7 @@ namespace CppRtos
 		{
 			_currentStackPointer = currentStack;
 		}
+		
 
 		inline StackAddr getStartStackddress() const
 		{
@@ -106,11 +109,15 @@ namespace CppRtos
 			return _basePriority;
 		}
 
+		inline void setTaskInterfacePtr( ITask* taskIntPtr )
+		{
+			taskInterfacePtr = taskIntPtr;
+		}
 
-		//inline void setRecordEndStackAddress()
-		//{
-		//	_endStack = _currentStackPointer;
-		//}
+		inline ITask* getTaskInterfacePtr() const 
+		{
+			return taskInterfacePtr;
+		}
 
 		inline StackAddr getEndStackddress() const
 		{
@@ -163,13 +170,20 @@ namespace CppRtos
         StackAddr _startStack = 0u; ///  Start of the stack
         StackAddr _endStack = 0u; /// End of the stack  ( ONly for recording purposes )
 
+		 ITask* taskInterfacePtr = nullptr;
 
 	};
 
+	class ITask
+	 {
+		public:
+    		virtual void run() = 0; 
+    		virtual ~ITask() = default;
+	};
 
 
     template<std::size_t STACK_SIZE>
-    class Task
+    class Task : public ITask
     {
     public:
 
@@ -179,13 +193,12 @@ namespace CppRtos
         	std::size_t start =  reinterpret_cast<std::size_t>( _stack.data() );
         	_data.setStartStack( _stack.data() );
         	_data.setTopStack( reinterpret_cast<void*>( start + _stack.size() ));
-			
+			_data.setTaskInterfacePtr( static_cast<ITask*>(this) );
         }
 
         virtual ~Task()
         {
         }
-
 
         inline void suspend()
         {
@@ -223,12 +236,13 @@ namespace CppRtos
         	return &_data;
         }
 
-        virtual void run() = 0;
+        virtual void run()
+		{			
+		}
 
     private:
 
         TaskData _data;
         std::array<std::uint8_t, STACK_SIZE> _stack = {};
     };
-
 }

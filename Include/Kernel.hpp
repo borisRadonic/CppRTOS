@@ -50,12 +50,8 @@ namespace CppRtos
 			, _taskCount (0u)
         	{
 			_tasks.fill(nullptr);
-
- 			using MemberFunctionType = void(IdleTask::*)();
-    		MemberFunctionType memberFunctionPointer = &IdleTask::run;
-
-			auto idleTaskFunction = std::bind(&IdleTask::run, &_idleTask);
-			this->addTask( _idleTask, idleTaskFunction );
+			
+			this->addTask( _idleTask );
 			_currentTask = _idleTask.getTaskData();
 
 			//Add Timer Task
@@ -73,19 +69,24 @@ namespace CppRtos
 
     public:
 	        template<std::size_t STACK_SIZE>
-	        void addTask( Task<STACK_SIZE>& task,  std::function<void()> taskFunction )
+	        void addTask( Task<STACK_SIZE>& task  )
 	        {
 	        	if( _taskCount < Settings::MAX_TASKS )
 	        	{
 	        		TaskData* ptrTaskData = task.getTaskData();
+
+
+
 	        		ptrTaskData->setId( _taskCount );
 	        		_tasks[_taskCount] = ptrTaskData;
 	        		_taskCount++;
 	
 	        		//add task to the Ready List
 	        		_port.enterCritical();
+
+
 									
-					StackAddr pStack = _port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), taskFunction, nullptr );
+					StackAddr pStack = _port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
 					ptrTaskData->setCurrentStackPtr( pStack );
 
 					_readyTasks.enqueue( ptrTaskData );
@@ -99,8 +100,7 @@ namespace CppRtos
 		{
 			return _currentTask;
 		}
-
-
+		
         void initialize()
 		{
 			_state = KernelState::eReady;

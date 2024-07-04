@@ -224,7 +224,7 @@ namespace CppRtos
 
 			void taskExitError(void) override;
 
-			void* initialiseStack(void* pxTopOfStack, std::function<void()> taskFunction, void* pvParameters) override;
+			void* initialiseStack(void* pxTopOfStack, void* pvParameters) override;
 
 
 		private:
