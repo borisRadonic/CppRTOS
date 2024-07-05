@@ -96,71 +96,70 @@
 		currentTaskDataAddr = convert.uint32;
 
 
-	__asm volatile
-	    (
-        	"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
+		__asm volatile
+	    	(
+        		"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
 	  	);
-        __asm volatile
+        	__asm volatile
 		(
 			"   ldr r1, [r3]                    \n" /* Use currentTaskDataAddr to get the current task data address. */
 		);
-        __asm volatile
+        	__asm volatile
 		(
 			"   ldr r2, [r1]                    \n" /* The first item in the current task data is the task top of stack. */
 		);
 
 
 		__asm volatile
-		    (
-		    "   mrs r0, psp                         \n" // Save the current PSP (Process Stack Pointer) into r0
-		    "   isb                                 \n"
-		    "                                       \n"
-		    //"   ldr r3, [%0]                        \n" /* Get the location of the currentTaskData variable. */
-		    //"   ldr r2, [r3]                        \n"
-		    "                                       \n"
-		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, push high vfp registers. */
-		    "   it eq                               \n"
-		    "   vstmdbeq r0!, {s16-s31}             \n"
-		    "                                       \n"
-		    "   stmdb r0!, {r4-r11, r14}            \n" /* Save the core registers. */
-		    "   str r0, [r2]                        \n" /* Save the new top of stack into the first member of the TCB. */
-		    "                                       \n"
-		    "   stmdb sp!, {r0, r3}                 \n"
-		    "   mov r0, %1                          \n"
-		    "   cpsid i                             \n" /* Errata workaround. */
-		    "   msr basepri, r0                     \n"
-		    "   dsb                                 \n"
-		    "   isb                                 \n"
-		    "   cpsie i                             \n" /* Errata workaround. */
-		    "   bl taskSwitchContext                \n"
-		    "   mov r0, #0                          \n"
-		    "   msr basepri, r0                     \n"
-		    "   ldmia sp!, {r0, r3}                 \n"
-		    "                                       \n"
-		    "   ldr r1, [r3]                        \n" /* The first item in currentTaskData is the task top of stack. */
-		    "   ldr r0, [r1]                        \n"
-		    "                                       \n"
-		    "   ldmia r0!, {r4-r11, r14}            \n" /* Pop the core registers. */
-		    "                                       \n"
-		    "   tst r14, #0x10                      \n" /* Is the task using the FPU context? If so, pop the high vfp registers too. */
-		    "   it eq                               \n"
-		    "   vldmiaeq r0!, {s16-s31}             \n"
-		    "                                       \n"
-		    "   msr psp, r0                         \n"
-		    "   isb                                 \n"
-		    "                                       \n"
-		    #ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
-		        #if WORKAROUND_PMU_CM001 == 1
-		    "           push { r14 }                \n"
-		    "           pop { pc }                  \n"
-		        #endif
+		(
+		    "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
+		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+
+		    "   ldr r3, pxCurrentTCBConst           \n" // Load the address of pxCurrentTCB into r3
+		    "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
+
+		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
+		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
+		    "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
+		    
+		    "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
+		    "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
+		    
+		    "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
+		    "   mov r0, %0                          \n" // Move the value of configMAX_SYSCALL_INTERRUPT_PRIORITY into r0
+		    "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
+		    "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
+		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+		    "   bl vTaskSwitchContext               \n" // Branch to the vTaskSwitchContext function (perform a context switch)
+		    "   mov r0, #0                          \n" // Clear r0
+		    "   msr basepri, r0                     \n" // Clear the BASEPRI register (reset interrupt priority)
+		    "   ldmia sp!, {r0, r3}                 \n" // Load multiple registers (r0 and r3) from the stack and increment SP
+		    
+		    "   ldr r1, [r3]                        \n" // Load the value at the address in r3 (i.e., the new TCB) into r1
+		    "   ldr r0, [r1]                        \n" // Load the stack pointer of the new task from the new TCB (pointed to by r1) into r0
+		    
+		    "   ldmia r0!, {r4-r11, r14}            \n" // Load multiple registers (r4-r11, r14) from the stack and increment r0
+		    
+		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
+		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
+		    "   vldmiaeq r0!, {s16-s31}             \n" // If using FPU context, load the high VFP registers (s16-s31) and increment r0
+		    
+		    "   msr psp, r0                         \n" // Move the updated stack pointer (r0) into the Process Stack Pointer (PSP)
+		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+		    
+		#ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
+		    #if WORKAROUND_PMU_CM001 == 1
+			"           push { r14 }                \n" // Push r14 onto the stack
+			"           pop { pc }                  \n" // Pop the value from the stack into the Program Counter (pc)
 		    #endif
-		    "                                       \n"
-		    "   bx r14                              \n"
-		    : // Outputs
-		    : "r" (&currentTaskDataAddr), "i" (MAX_SYSCALL_INTERRUPT_PRIORITY) // Inputs
-		    : "r0", "r1", "r2", "r3", "r14" // Clobbered registers
-		    );
+		#endif
+		
+		    "   bx r14                              \n" // Branch to the address in r14 (return from exception)
+		    
+		    "   .align 4                            \n" // Align the next data on a 4-byte boundary
+		    "pxCurrentTCBConst: .word pxCurrentTCB  \n" // Define a word containing the address of pxCurrentTCB
+		    ::"i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY )
+		);
 	}
 
 
