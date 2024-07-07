@@ -1,8 +1,15 @@
-#include "../Include/Port.hpp"
-#include "../Include/Config.hpp"
-#include "../Include/Kernel.hpp"
+#include "Port.hpp"
+#include "Config.hpp"
+#include "Kernel.hpp"
 
+	struct CURRENT_TCB
+	{
+		void* currentStackPtr = nullptr;
+	};
 
+	static CURRENT_TCB tcb;
+
+	CURRENT_TCB *ptrCurrentTask = &tcb;
 
 	extern "C" void SVC_Handler( void );
 
@@ -37,6 +44,7 @@
 		ConvertVoidPtrUin32 convert;
 		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
 		currentTaskDataAddr = convert.uint32;
+		ptrCurrentTask->currentStackPtr = convert.dataVoid;
 
 	  	__asm volatile
 	    (
@@ -89,33 +97,13 @@
 	}
 
 	void PendSV_Handler(void) 
-	{
-		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		ConvertVoidPtrUin32 convert;
-		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
-		currentTaskDataAddr = convert.uint32;
-
-
-		__asm volatile
-	    	(
-        		"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
-	  	);
-        	__asm volatile
-		(
-			"   ldr r1, [r3]                    \n" /* Use currentTaskDataAddr to get the current task data address. */
-		);
-        	__asm volatile
-		(
-			"   ldr r2, [r1]                    \n" /* The first item in the current task data is the task top of stack. */
-		);
-
-
+	{		
 		__asm volatile
 		(
 		    "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
 		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
 
-		    "   ldr r3, pxCurrentTCBConst           \n" // Load the address of pxCurrentTCB into r3
+		    "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
 		    "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
 
 		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
@@ -130,7 +118,7 @@
 		    "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
 		    "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
 		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-		    "   bl vTaskSwitchContext               \n" // Branch to the vTaskSwitchContext function (perform a context switch)
+		    "   bl taskSwitchContext               \n"  // Branch to the taskSwitchContext function (perform a context switch)
 		    "   mov r0, #0                          \n" // Clear r0
 		    "   msr basepri, r0                     \n" // Clear the BASEPRI register (reset interrupt priority)
 		    "   ldmia sp!, {r0, r3}                 \n" // Load multiple registers (r0 and r3) from the stack and increment SP
@@ -157,8 +145,8 @@
 		    "   bx r14                              \n" // Branch to the address in r14 (return from exception)
 		    
 		    "   .align 4                            \n" // Align the next data on a 4-byte boundary
-		    "pxCurrentTCBConst: .word pxCurrentTCB  \n" // Define a word containing the address of pxCurrentTCB
-		    ::"i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY )
+		    "ptrCurrentTaskConst: .word ptrCurrentTask  \n" // Define a word containing the address of pxCurrentTCB
+		    ::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
 		);
 	}
 

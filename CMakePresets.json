@@ -4,10 +4,10 @@
      
         {
             "name": "make_debug_no_lint",
-            "displayName": "CubeIDE Make Debug no Linting",
+            "displayName": "Make Debug no Linting",
             "generator": "Unix Makefiles",
             "binaryDir": "build/Debug",
-            "toolchainFile": "cubeide-gcc.cmake",
+            "toolchainFile": "rtos-gcc.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "LINTING" : "OFF"
@@ -15,10 +15,10 @@
         },
         {
             "name": "make_debug_linting",
-            "displayName": "CubeIDE Make Debug with Linting",
+            "displayName": "Make Debug with Linting",
             "generator": "Unix Makefiles",
             "binaryDir": "build/Debug",
-            "toolchainFile": "cubeide-gcc.cmake",
+            "toolchainFile": "rtos-gcc.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug"
             }
@@ -28,10 +28,10 @@
        
         {
             "name": "make_release",
-            "displayName": "CubeIDE Make Release",
+            "displayName": "Make Release",
             "generator": "Unix Makefiles",
             "binaryDir": "build/Release",
-            "toolchainFile": "cubeide-gcc.cmake",
+            "toolchainFile": "rtos-gcc.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
