@@ -230,15 +230,8 @@ extern "C" uint32_t SystemCoreClock;
 
 			setPrivilegedMode();
 
-			//enableInterrupts();
-
-			// Enable VFP
-			//this->enableVFP();
-
-		 /* Lazy save always. */
+			 /* Lazy save FPU registers */
 			// *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;
-
-		   /* Start the first task. */
 
 			this->startFirstTask();
 			/*It should never get here*/

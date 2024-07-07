@@ -68,7 +68,7 @@ namespace CppRtos
                             _ptrKernel->enableInterrupts();
 
                             // Switch context
-                            _ptrKernel->switchContext();
+                            _ptrKernel->yield();
                         }
                     }
 

@@ -148,8 +148,7 @@ namespace CppRtos
 			inline void yield() const
 			{
 				 // Set a PendSV to request a context switch.
-				//NVIC_INT_CTRL_REG |= NVIC_PENDSVSET_BIT;
-				//NVIC_ICSR ??
+				NVIC_ICSR |= ICSR_PENDSVSET_BIT;
 		        __asm volatile ( "dsb" ::: "memory" );
 		        __asm volatile ( "isb" );
 			}

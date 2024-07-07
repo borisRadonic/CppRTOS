@@ -169,12 +169,7 @@ namespace CppRtos
 		{
 			_port.yield();
 		}
-
-		inline void switchContext()
-		{
-			/*TODO: Implement logic here...*/
-		}
-
+		
 		inline bool isInsideInterrupt( void ) const
 		{
 			return _port.isInsideInterrupt();
