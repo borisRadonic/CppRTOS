@@ -34,6 +34,7 @@ void FPU_init(void)
     SCB->CPACR |= ((3UL << 20) | (3UL << 22));
 }
 
+char test[100];
 
 class Task1 : public CppRtos::Task<2048>
 {
@@ -124,6 +125,7 @@ void SystemClock_Config(void)
   }
 }
 
+Task1 task1;
 
 int main(void)
 {
@@ -141,9 +143,8 @@ a++;
 	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
 
 	std::string_view taskName1 = "Task 1";
-
-	Task1 task1;
-	task1.setPriority(50);
+	
+	task1.setPriority( CppRtos::TaskPriority::PRIORITY_IDLE );
 	task1.setName( taskName1);
 
  	ptrKernel->addTask(task1);

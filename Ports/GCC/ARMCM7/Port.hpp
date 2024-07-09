@@ -119,6 +119,16 @@ namespace CppRtos
 		constexpr std::uint32_t	NVIC_PENDSV_PRI =  (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_PENDSV_BITS;
 		constexpr std::uint32_t	NVIC_SYSTICK_PRI = (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_SYSTICK_BITS;
 	
+		// Define the address of the FPCCR register (SCB_FPCCR)
+
+		#define PFPCCR *(( uint32_t *) 0xE000EF34 )
+
+		// Define the bits for ASPEN (Automatic State Preservation Enable) and LSPEN (Lazy State Preservation Enable)
+		#define ASPEN_BIT  (1 << 31)
+		#define LSPEN_BIT  (1 << 30)
+		#define ASPEN_AND_LSPEN_BITS (ASPEN_BIT | LSPEN_BIT)
+
+
 		class Port : public IPort
 		{
 		public:

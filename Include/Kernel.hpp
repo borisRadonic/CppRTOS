@@ -75,24 +75,23 @@ namespace CppRtos
 	        	{
 	        		TaskData* ptrTaskData = task.getTaskData();
 
-
-
 	        		ptrTaskData->setId( _taskCount );
 	        		_tasks[_taskCount] = ptrTaskData;
 	        		_taskCount++;
 	
 	        		//add task to the Ready List
 	        		_port.enterCritical();
-
-
-									
+								
 					StackAddr pStack = _port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
 					ptrTaskData->setCurrentStackPtr( pStack );
 
-					_readyTasks.enqueue( ptrTaskData );
-	
-	        		_port.exitCritical();
-	
+					std::size_t prio = static_cast<std::size_t>(ptrTaskData->getPriority());
+					assert( prio < _readyTasks.size() );
+					if( prio < _readyTasks.size() )
+					{
+						_readyTasks[prio].enqueue( ptrTaskData );
+					}
+					_port.exitCritical();
 	        	}
 	        }
 
@@ -123,7 +122,7 @@ namespace CppRtos
 			_state = KernelState::eLocked;
 		}
 
-        	void unLock()
+        void unLock()
 		{
 			//todo
 			//_state = KernelState::eRunning; ???
@@ -177,9 +176,44 @@ namespace CppRtos
 
 		inline void selectHighestPriorityTask()
 		{
-			//todo
+			TaskPriority currentPriority = _currentTask->getPriority();
+			//take next ready task with highest priority
+			for (auto& task : _readyTasks)			
+			{
+				if( !task.isEmpty() )
+				{
+					TaskData* ptrTaskData = task.getAt(0);
+					/*check condition for preemption*/
+					if( _currentTask->getState() == TaskStateType::eRunning )
+					{
+						if( ptrTaskData->getPriority() >= currentPriority )
+						{	
+							TaskData* ptrTaskData = task.dequeue();
+							_currentTask = ptrTaskData;
+							//change the state of old Running task to Ready
+							ptrTaskData->setState( TaskStateType::eReady );
+							//add old task to list of ready tasks
+							std::size_t prio = static_cast<std::size_t>(currentPriority);
+							assert( prio < _readyTasks.size() );
+							if( prio < _readyTasks.size() )
+							{
+								_readyTasks[prio].enqueue( ptrTaskData );
+								break;
+							}
+						}
+					}
+					else
+					{
+						_currentTask = task.dequeue();
+						_currentTask->setState( TaskStateType::eRunning );
+						break;
+					}
+				}
+			}
+
 		}
 
+		using ReadyTasks = Fifo<TaskData*, Settings::MAX_TASKS>;
 
     private:
 
@@ -188,8 +222,8 @@ namespace CppRtos
         KernelError 	_lastError = KernelError::eOK;
       
         std::array<TaskData*, Settings::MAX_TASKS> _tasks;
-
-		Fifo<TaskData*, Settings::MAX_TASKS> _readyTasks = {};
+		
+		std::array< ReadyTasks, MAX_PRIORY_LEVELS> _readyTasks = {};
 
 		TaskData* _currentTask = nullptr;
 

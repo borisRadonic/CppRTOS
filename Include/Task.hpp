@@ -23,6 +23,37 @@ namespace CppRtos
 		eSuspended		= 3u
 	};
 
+	enum class TaskPriority : uint8_t
+	{
+		PRIORITY_HIGHEST 			= 0u,    // Highest priority
+		PRIORITY_VERY_HIGH 			= 1u,
+		PRIORITY_HIGH 				= 2u,
+		PRIORITY_MODERATELY_HIGH 	= 3u,
+		PRIORITY_MEDIUM_HIGH 		= 4u,
+		PRIORITY_SLIGHTLY_HIGH 		= 5u,
+		PRIORITY_ABOVE_AVERAGE 		= 6u,
+		PRIORITY_AVERAGE 			= 7u,
+		PRIORITY_BELOW_AVERAGE 		= 8u,
+		PRIORITY_SLIGHTLY_LOW 		= 9u,
+		PRIORITY_MEDIUM_LOW 		= 10u,
+		PRIORITY_MODERATELY_LOW 	= 11u,
+		PRIORITY_LOW 				= 12u,
+		PRIORITY_VERY_LOW 			= 13u,
+		PRIORITY_LOWER_LOW 			= 14u,
+		PRIORITY_IDLE				= 15u,	// Lowest priority
+		PRIORITY_RESERVED           = 0xFF
+	};
+	constexpr std::uint8_t MAX_PRIORY_LEVELS = static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE) + 1u;
+
+	inline bool operator < (TaskPriority lhs, TaskPriority rhs)
+	{
+		return static_cast<uint8_t>(lhs) > static_cast<uint8_t>(rhs);
+	}
+
+	inline bool operator > (TaskPriority lhs, TaskPriority rhs)
+	{
+    	return static_cast<uint8_t>(lhs) < static_cast<uint8_t>(rhs);
+	}
 
 	using StackAddr = void*;
        
@@ -33,8 +64,8 @@ namespace CppRtos
 
 		explicit TaskData()
 		: _currentStackPointer( nullptr )
-		, _priority(0u)
-		, _basePriority (0u)
+		, _priority( TaskPriority::PRIORITY_IDLE )
+		, _basePriority( TaskPriority::PRIORITY_IDLE )
 		, _numOfHeldMutexes( 0u )
 		, _runCounter( 0u )
 		, _state(TaskStateType::eReady)
@@ -82,11 +113,11 @@ namespace CppRtos
 			return _startStack;
 		}
 
-		inline void setPriority(const std::uint32_t priority)
+		inline void setPriority(TaskPriority priority)
 		{
-			if( priority >= Settings::MAX_PRIORITY )
+			if( priority > TaskPriority::PRIORITY_IDLE )
 			{
-				_priority = Settings::MAX_PRIORITY -1u;
+				_priority = TaskPriority::PRIORITY_IDLE;
 			}
 			else
 			{
@@ -94,17 +125,17 @@ namespace CppRtos
 			}
 		}
 
-		inline int getPriority() const
+		inline TaskPriority getPriority() const
 		{
 			return _priority;
 		}
 
-		inline void setBasePriority( const std::uint32_t basePriority )
+		inline void setBasePriority( const TaskPriority basePriority )
 		{
 			_basePriority = basePriority;
 		}
 
-		inline int getBasePriority() const
+		inline TaskPriority getBasePriority() const
 		{
 			return _basePriority;
 		}
@@ -153,9 +184,9 @@ namespace CppRtos
 
 	 protected:
 		StackAddr 		_currentStackPointer = 0u; 
-		std::uint32_t 	_priority = 0u;
+		TaskPriority 	_priority = TaskPriority::PRIORITY_IDLE;
 
-        std::uint32_t 	_basePriority = 0u; // Used for mutexes by priority inheritance logic
+        TaskPriority 	_basePriority = TaskPriority::PRIORITY_IDLE; // Used for mutexes by priority inheritance logic
         std::uint32_t 	_numOfHeldMutexes = 0u;
 
         std::uint64_t 	_runCounter = 0U;
@@ -220,7 +251,7 @@ namespace CppRtos
         	_data.setState( TaskStateType::eReady );
         }
 
-        inline void setPriority( std::uint32_t priority )
+        inline void setPriority( TaskPriority priority )
         {
         	_data.setPriority( priority );
         }

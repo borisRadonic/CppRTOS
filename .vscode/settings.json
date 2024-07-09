@@ -72,10 +72,11 @@
         "thread": "cpp",
         "typeinfo": "cpp",
         "variant": "cpp",
-        "stm32h7xx_hal.h": "c"
+        "stm32h7xx_hal.h": "c",
+        "format": "cpp",
+        "span": "cpp"
     },
-    "cmake.configureSettings":
-    {
+    "cmake.configureSettings": {
         "CMAKE_TOOLCHAIN_FILE": "C:/ST/STM32CubeIDE_1.13.1/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.11.3.rel1.win32_1.1.0.202305231506/tools/bin/"
     },
     "editor.fontSize": 14,
@@ -85,5 +86,5 @@
     "files.autoSaveDelay": 1000,
     "editor.tabSize": 4,
     "editor.formatOnSave": true,
-    "terminal.integrated.fontSize": 14   
+    "terminal.integrated.fontSize": 14
 }

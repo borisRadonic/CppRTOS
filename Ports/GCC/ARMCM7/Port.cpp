@@ -21,10 +21,24 @@
 	{
 		/*call kernel function*/
 		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		//pKernel->
+		//pKernel->enterCritical();
 		if( pKernel != nullptr )
 		{
+			//store updated stack pointer
+			CppRtos::TaskData* ptrTaskData = pKernel->getCurrentTask();
+			ptrTaskData->setCurrentStackPtr( ptrCurrentTask->currentStackPtr );
+
 			pKernel->selectHighestPriorityTask();
-		}	
+
+			if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
+			{
+				//get new stack pointer and store to ptrCurrentTask
+				ptrTaskData = pKernel->getCurrentTask();			
+				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
+			}
+		}
+		//pKernel->_port.exitCritical();
 	}
 
 
@@ -96,36 +110,57 @@
 		while (1);  // Infinite loop to catch Usage Fault
 	}
 
+
+
 	void PendSV_Handler(void) 
 	{		
-		__asm volatile
-		(
-		    "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
-		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+		 __asm volatile
+		 (
+		     "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
+		     "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
 
-		    "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
-		    "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
+		     "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
+		     "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
 
-		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
-		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
-		    "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
+		     "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
+		     "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
+		     "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
 		    
-		    "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
-		    "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
+		     "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
+		     "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
 		    
-		    "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
-		    "   mov r0, %0                          \n" // Move the value of configMAX_SYSCALL_INTERRUPT_PRIORITY into r0
-		    "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
-		    "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
-		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-		    "   bl taskSwitchContext               \n"  // Branch to the taskSwitchContext function (perform a context switch)
+		     "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
+		     "   mov r0, %0                          \n" // Move the value of MAX_SYSCALL_INTERRUPT_PRIORITY into r0
+		     "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
+		     "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
+		     "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+		     "   bl taskSwitchContext               \n"  // Branch to the taskSwitchContext function (perform a context switch)
+
+			  "   .align 4                            \n" // Align the next data on a 4-byte boundary
+			  ::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
+		 );
+
+ 		 uint32_t r0_value = 0u;
+ 		 __asm volatile
+		 (
 		    "   mov r0, #0                          \n" // Clear r0
 		    "   msr basepri, r0                     \n" // Clear the BASEPRI register (reset interrupt priority)
 		    "   ldmia sp!, {r0, r3}                 \n" // Load multiple registers (r0 and r3) from the stack and increment SP
 		    
 		    "   ldr r1, [r3]                        \n" // Load the value at the address in r3 (i.e., the new TCB) into r1
 		    "   ldr r0, [r1]                        \n" // Load the stack pointer of the new task from the new TCB (pointed to by r1) into r0
-		    
+			: "=r" (r0_value)                         // Output operand to get the value of r0
+			:                                         // No input operands
+			: "r0", "r1", "r3", "memory"              // Clobbered registers
+			);
+
+			if (r0_value == 0)
+			{
+				return;
+			}
+
+		  __asm volatile
+		 (		  		    
 		    "   ldmia r0!, {r4-r11, r14}            \n" // Load multiple registers (r4-r11, r14) from the stack and increment r0
 		    
 		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
@@ -135,12 +170,10 @@
 		    "   msr psp, r0                         \n" // Move the updated stack pointer (r0) into the Process Stack Pointer (PSP)
 		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
 		    
-		#ifdef WORKAROUND_PMU_CM001 /* XMC4000 specific errata workaround. */
 		    #if WORKAROUND_PMU_CM001 == 1
 			"           push { r14 }                \n" // Push r14 onto the stack
 			"           pop { pc }                  \n" // Pop the value from the stack into the Program Counter (pc)
 		    #endif
-		#endif
 		
 		    "   bx r14                              \n" // Branch to the address in r14 (return from exception)
 		    
@@ -231,7 +264,7 @@ extern "C" uint32_t SystemCoreClock;
 			setPrivilegedMode();
 
 			 /* Lazy save FPU registers */
-			// *( portFPCCR ) |= portASPEN_AND_LSPEN_BITS;
+			 PFPCCR |= ASPEN_AND_LSPEN_BITS;
 
 			this->startFirstTask();
 			/*It should never get here*/
