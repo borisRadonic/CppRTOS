@@ -15,13 +15,12 @@
 
 	extern "C" void PendSV_Handler( void );
 
-	extern "C" void taskSwitchContext(void) __attribute__((section("privileged_functions")));
+	extern "C" void taskSwitchContext(void) noexcept __attribute__((section("privileged_functions")));
 
-	void taskSwitchContext()
+	void taskSwitchContext() noexcept
 	{
 		/*call kernel function*/
 		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		//pKernel->
 		//pKernel->enterCritical();
 		if( pKernel != nullptr )
 		{
@@ -31,14 +30,14 @@
 
 			pKernel->selectHighestPriorityTask();
 
-			if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
-			{
+			//if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
+			//{
 				//get new stack pointer and store to ptrCurrentTask
 				ptrTaskData = pKernel->getCurrentTask();			
 				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
-			}
+			//}
 		}
-		//pKernel->_port.exitCritical();
+		//pKernel->exitCritical();
 	}
 
 
@@ -239,10 +238,13 @@ extern "C" uint32_t SystemCoreClock;
 		extern "C" void SysTick_Handler( void )
 		{
 			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-			pKernel->disableInterrupts();
+			pKernel->enterCritical();
 			pKernel->incrementTickCount();
-			NVIC_ICSR = ICSR_PENDSVSET_BIT;
-			pKernel->enableInterrupts();
+			if( pKernel->getTickCount() )
+			{
+				NVIC_ICSR = ICSR_PENDSVSET_BIT;
+			}
+			pKernel->exitCritical();
 		}
 
 		void Port::validateInterruptPriority(void) const

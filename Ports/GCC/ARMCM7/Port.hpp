@@ -116,8 +116,15 @@ namespace CppRtos
 
 		//Highest interrupt priority that can be used by any ISR
 		constexpr std::uint8_t MAX_SYSCALL_INT_PRIORIRY = 5u;
-		constexpr std::uint32_t	NVIC_PENDSV_PRI =  (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_PENDSV_BITS;
-		constexpr std::uint32_t	NVIC_SYSTICK_PRI = (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_SYSTICK_BITS;
+
+		#define MIN_INTERRUPT_PRIORITY            ( 255UL )
+
+		constexpr std::uint32_t	NVIC_PENDSV_PRI =  ( ( ( uint32_t ) MIN_INTERRUPT_PRIORITY ) << 16UL );
+		constexpr std::uint32_t	NVIC_SYSTICK_PRI = ( ( ( uint32_t ) MIN_INTERRUPT_PRIORITY ) << 24UL );
+	
+
+		//constexpr std::uint32_t	NVIC_PENDSV_PRI =  (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_PENDSV_BITS;
+		//constexpr std::uint32_t	NVIC_SYSTICK_PRI = (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_SYSTICK_BITS;
 	
 		// Define the address of the FPCCR register (SCB_FPCCR)
 
@@ -155,12 +162,16 @@ namespace CppRtos
 				return _cpu.isIRQMode();
 			}
 
-			inline void yield() const
+			inline void yield()
 			{
 				 // Set a PendSV to request a context switch.
-				NVIC_ICSR |= ICSR_PENDSVSET_BIT;
-		        __asm volatile ( "dsb" ::: "memory" );
-		        __asm volatile ( "isb" );
+				enterCritical();
+				NVIC_ICSR = ICSR_PENDSVSET_BIT;
+				this->exitCritical();
+
+				//NVIC_ICSR |= ICSR_PENDSVSET_BIT;
+		        //__asm volatile ( "dsb" ::: "memory" );
+		        //__asm volatile ( "isb" );
 			}
 
 			inline void disableInterrupts( void )  const

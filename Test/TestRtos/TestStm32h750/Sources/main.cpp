@@ -17,10 +17,13 @@
  */
 
 #include <stdint.h>
-
+#include <new>
+#include <cstring>
 #include "Port.hpp"
 #include "Task.hpp"
 #include "Kernel.hpp"
+#include "Mutex.hpp"
+#include <memory>
 
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_pwr_ex.h"
@@ -34,8 +37,6 @@ void FPU_init(void)
     SCB->CPACR |= ((3UL << 20) | (3UL << 22));
 }
 
-char test[100];
-
 class Task1 : public CppRtos::Task<2048>
 {
 public:
@@ -45,16 +46,56 @@ public:
 
 	}
 
+  CppRtos::Mutex* mutex;
+
 	void run() override
 	{
 		while(true)
 		{
+      int a = 0;
+        //mutex->acquire(1000);
+        for ( int i = 0 ; i < 1000000; i++ )
+        {
+          a++;
+        }
+        //mutex->release();
 		}
 	}
 };
 
 
-std::aligned_storage_t<sizeof(CppRtos::Kernel)> _prealoc_kernel_mem;
+
+class Task2 : public CppRtos::Task<4096>
+{
+public:
+
+	Task2():CppRtos::Task<4096>()
+	{
+
+	}
+
+  CppRtos::Mutex* mutex;
+  
+	void run() override
+	{
+    int a = 0;
+		while(true)
+		{
+      //mutex->acquire(1000);
+      for ( int i = 0 ; i < 1000000; i++ )
+      {
+        a++;
+      }
+      //mutex->release();
+		}
+	}
+};
+
+static std::aligned_storage_t<sizeof(CppRtos::Kernel)> _prealoc_kernel_mem;
+static std::aligned_storage_t<sizeof(Task1)> _prealoc_task1;
+static std::aligned_storage_t<sizeof(Task2)> _prealoc_task2;
+static std::aligned_storage_t<sizeof(CppRtos::Mutex)> _prealoc_mutex1;
+
 
 void Error_Handler(void)
 {
@@ -125,8 +166,6 @@ void SystemClock_Config(void)
   }
 }
 
-Task1 task1;
-
 int main(void)
 {
 
@@ -139,15 +178,32 @@ a++;
 
 	FPU_init();
 
+
 	CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
 	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
 
-	std::string_view taskName1 = "Task 1";
-	
-	task1.setPriority( CppRtos::TaskPriority::PRIORITY_IDLE );
-	task1.setName( taskName1);
+  std::memset(&_prealoc_task1, 0xDE, sizeof(Task1));
+  std::memset(&_prealoc_task2, 0xDE, sizeof(Task2));
+ 
+  CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
+  Task1* task1 = new(&_prealoc_task1) Task1;
+  Task2* task2 = new(&_prealoc_task2) Task2;
 
- 	ptrKernel->addTask(task1);
+
+ 
+  task1->mutex = mutex;
+  task2->mutex = mutex;
+
+
+  std::string_view taskName1 = "Task 1";
+	task1->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
+	task1->setName( taskName1);
+  ptrKernel->addTask(*task1);
+
+  std::string_view taskName2 = "Task 2";
+	task2->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
+	task2->setName( taskName2);
+ 	ptrKernel->addTask(*task2);
 
 	ptrKernel->start();
 

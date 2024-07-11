@@ -164,6 +164,16 @@ namespace CppRtos
 			_port.enableInterrupts();
 		}
 
+		inline void enterCritical(void)
+		{
+			_port.enterCritical();
+		}
+
+		inline void exitCritical(void)
+		{
+			_port.exitCritical();
+		}
+
 		inline void yield()
 		{
 			_port.yield();
@@ -176,6 +186,22 @@ namespace CppRtos
 
 		inline void selectHighestPriorityTask()
 		{
+			static int task = 0;
+			if( task == 0 )
+			{
+				task = 1;
+			}
+			else if( task == 1 )
+			{
+				task = 2;
+			}
+			else
+			{
+				task = 0;
+			}
+			_currentTask = _tasks[task];
+			return;
+
 			TaskPriority currentPriority = _currentTask->getPriority();
 			//take next ready task with highest priority
 			for (auto& task : _readyTasks)			
@@ -244,12 +270,12 @@ namespace CppRtos
 	private:
 
 		bool _isCreated = false;
-		Kernel* _instance = nullptr;
+		Kernel* kernel = nullptr;
 
 		/**
 		* @brief Private constructor to prevent external instantiation.
 		*/
-		KernelFactory() : _isCreated(false), _instance(nullptr)
+		KernelFactory() : _isCreated(false), kernel(nullptr)
 		{
 		}
 
@@ -259,26 +285,27 @@ namespace CppRtos
 		KernelFactory(const KernelFactory&) = delete;
 		KernelFactory& operator=(const KernelFactory&) = delete;
 
-		inline static KernelFactory& getInstance()
+
+		inline static KernelFactory& getInstance() noexcept
 		{
 			static KernelFactory instanceFactory; // This creates a single instance on first use
 			return instanceFactory;
 		}
 
-		inline Kernel* getKernel()
+		inline Kernel* getKernel() noexcept
 		{
-			return _instance;
+			return kernel;
 		}
 
-		Kernel* create( void* platformMemory )
+		Kernel* create( void* platformMemory ) noexcept
 		{
 			if (_isCreated)
 			{
 				return nullptr;
 			}
 			_isCreated = true;
-			_instance = new(platformMemory) Kernel();
-			return _instance;
+			kernel = new(platformMemory) Kernel();
+			return kernel;
 		}
 
 		void destroy( void* platformMemory )

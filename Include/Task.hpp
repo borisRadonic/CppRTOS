@@ -115,13 +115,15 @@ namespace CppRtos
 
 		inline void setPriority(TaskPriority priority)
 		{
-			if( priority > TaskPriority::PRIORITY_IDLE )
+			if( priority < TaskPriority::PRIORITY_IDLE )
 			{
 				_priority = TaskPriority::PRIORITY_IDLE;
+				_basePriority = _priority;
 			}
 			else
 			{
 				_priority = priority;
+				_basePriority = _priority;
 			}
 		}
 
