@@ -37,6 +37,110 @@ void FPU_init(void)
     SCB->CPACR |= ((3UL << 20) | (3UL << 22));
 }
 
+
+	
+    extern "C" void hard_fault_handler_c(unsigned int * hardfault_args)
+    {
+      unsigned int stacked_r0 = ((unsigned long) hardfault_args[0]);
+      unsigned int stacked_r1 = ((unsigned long) hardfault_args[1]);
+      unsigned int stacked_r2 = ((unsigned long) hardfault_args[2]);
+      unsigned int stacked_r3 = ((unsigned long) hardfault_args[3]);
+      unsigned int stacked_r12 = ((unsigned long) hardfault_args[4]);
+      unsigned int stacked_lr = ((unsigned long) hardfault_args[5]);
+      unsigned int stacked_pc = ((unsigned long) hardfault_args[6]);
+      unsigned int stacked_psr = ((unsigned long) hardfault_args[7]);
+
+      // Fault Status Register (CFSR)
+      //Subregisters            
+        // MMFSR (Memory Management Fault Status Register)
+        //     Bit 0: IACCVIOL: Instruction access violation.
+        //     Bit 1: DACCVIOL: Data access violation.
+        //     Bit 3: MUNSTKERR: Unstacking error.
+        //     Bit 4: MSTKERR: Stacking error.
+        //     Bit 5: MLSPERR: Lazy state preservation error.
+        //     Bit 7: MMARVALID: Indicates MMFAR is valid.
+
+        // BFSR (Bus Fault Status Register)
+        //     Bit 8: IBUSERR: Instruction bus error.
+        //     Bit 9: PRECISERR: Precise data bus error.
+        //     Bit 10: IMPRECISERR: Imprecise data bus error.
+        //     Bit 11: UNSTKERR: Unstacking error.
+        //     Bit 12: STKERR: Stacking error.
+        //     Bit 13: LSPERR: Lazy state preservation error.
+        //     Bit 15: BFARVALID: Indicates BFAR is valid.
+
+        // UFSR (Usage Fault Status Register)
+        //     Bit 16: UNDEFINSTR: Undefined instruction.
+        //     Bit 17: INVSTATE: Invalid state.
+        //     Bit 18: INVPC: Invalid PC load usage fault.
+        //     Bit 19: NOCP: No coprocessor.
+        //     Bits 24-25: UNALIGNED: Unaligned access usage fault.
+        //     Bits 26-27: DIVBYZERO: Divide by zero.
+      uint32_t cfsr = SCB->CFSR;
+
+      //HardFault Status Register (HFSR)
+        //  Bits:
+        //  0: Reserved.
+        //  1: Indicates a forced hard fault.
+        //  30: Debug event.
+        //  31: Indicates vector table read fault.        
+      uint32_t hfsr = SCB->HFSR;
+
+      //Debug Fault Status Register(DFSR)
+      uint32_t dfsr = SCB->DFSR;
+
+      //Auxiliary Fault Status Register (AFSR)
+      uint32_t afsr = SCB->AFSR;
+
+      //MemManage Fault Address Register (MMFAR)
+      uint32_t mmfar = SCB->MMFAR;
+
+      //Bus Fault Address Register (BFAR)
+      uint32_t bfar = SCB->BFAR;
+
+		while (1);  // Infinite loop to catch HardFault
+    assert( cfsr != 0u );
+    assert( hfsr != 0u );
+    assert( dfsr != 0u );
+    assert( afsr != 0u );
+    assert( mmfar != 0u );
+    assert( bfar != 0u );
+    assert( stacked_r0 != 0u );
+    assert( stacked_r1 != 0u );
+    assert( stacked_r2 != 0u );
+    assert( stacked_r3 != 0u );
+    assert( stacked_r12 != 0u );
+    assert( stacked_lr != 0u );
+    assert( stacked_pc != 0u );
+    assert( stacked_psr != 0u );
+	}
+
+  extern "C" void HardFault_Handler(void)
+	{
+    asm volatile (
+        "TST lr, #4         \n"
+        "ITE EQ             \n"
+        "MRSEQ r0, MSP      \n"
+        "MRSNE r0, PSP      \n"
+        "B hard_fault_handler_c \n"
+    );
+  }
+
+	extern "C" void MemManage_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Memory Management Fault
+	}
+
+	extern "C" void BusFault_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Bus Fault
+	}
+
+	extern "C" void UsageFault_Handler(void)
+	{
+		while (1);  // Infinite loop to catch Usage Fault
+	}
+
 class Task1 : public CppRtos::Task<2048>
 {
 public:
@@ -53,12 +157,13 @@ public:
 		while(true)
 		{
       int a = 0;
-        //mutex->acquire(1000);
+        mutex->acquire(1000);
         for ( int i = 0 ; i < 1000000; i++ )
         {
           a++;
         }
-        //mutex->release();
+        a = 0;
+        mutex->release();
 		}
 	}
 };
@@ -81,20 +186,22 @@ public:
     int a = 0;
 		while(true)
 		{
-      //mutex->acquire(1000);
+      mutex->acquire(1000);
       for ( int i = 0 ; i < 1000000; i++ )
       {
         a++;
       }
-      //mutex->release();
+      a = 0;
+      mutex->release();
 		}
 	}
 };
 
-static std::aligned_storage_t<sizeof(CppRtos::Kernel)> _prealoc_kernel_mem;
-static std::aligned_storage_t<sizeof(Task1)> _prealoc_task1;
-static std::aligned_storage_t<sizeof(Task2)> _prealoc_task2;
-static std::aligned_storage_t<sizeof(CppRtos::Mutex)> _prealoc_mutex1;
+static std::aligned_storage_t<sizeof(CppRtos::Kernel),4> _prealoc_kernel_mem;
+static std::aligned_storage_t<sizeof(Task1),4> _prealoc_task1;
+static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task2;
+static std::aligned_storage_t<1024,4> _prealoc_barier;
+static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
 
 
 void Error_Handler(void)
@@ -183,7 +290,9 @@ a++;
 	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
 
   std::memset(&_prealoc_task1, 0xDE, sizeof(Task1));
-  std::memset(&_prealoc_task2, 0xDE, sizeof(Task2));
+  std::memset(&_prealoc_barier, 0xDE, 1024);
+
+
  
   CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
   Task1* task1 = new(&_prealoc_task1) Task1;

@@ -94,7 +94,7 @@ endif()
 set(PROJECT_TYPE "exe" )
 
 
-
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Add include directories
 include_directories(${PROJECT_INCLUDES})
@@ -124,7 +124,7 @@ set(COMMON_FLAGS -mthumb -Wall -Werror)
 
 # Define C and C++ compiler flags separately as lists of separate items
 set(C_FLAGS -std=gnu11 ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
-set(CXX_FLAGS -std=c++17 ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
+set(CXX_FLAGS -fno-threadsafe-statics -std=c++17 ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
 set(ASM_FLAGS -x assembler-with-cpp ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
 
 

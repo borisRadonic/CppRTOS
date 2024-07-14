@@ -37,7 +37,7 @@ set(RUNTIME_LIBRARY_SYSCALLS ${RUNTIME_LIBRARY_SYSCALLS_MINIMAL})
 
 # No optimization for Debug
 set(CMAKE_C_FLAGS_DEBUG    "-g3 -O0 -DDEBUG" CACHE STRING "C debug flags")
-set(CMAKE_CXX_FLAGS_DEBUG  "-fno-exceptions -fno-rtti -g3 -O0 -DDEBUG" CACHE STRING "CXX debug flags")
+set(CMAKE_CXX_FLAGS_DEBUG  "-fno-threadsafe-statics -fno-exceptions -fno-rtti -g3 -O0 -DDEBUG" CACHE STRING "CXX debug flags")
 set(CMAKE_ASM_FLAGS_DEBUG  "-g3 -O0 -DDEBUG" CACHE STRING "ASM debug flags")
 
 # Optimize on size for Release

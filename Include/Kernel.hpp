@@ -184,7 +184,7 @@ namespace CppRtos
 			return _port.isInsideInterrupt();
 		}
 
-		inline void selectHighestPriorityTask()
+		inline void selectHighestPriorityTask() 
 		{
 			static int task = 0;
 			if( task == 0 )
@@ -284,7 +284,6 @@ namespace CppRtos
 		// Prevent creating multiple instances of the KernelFactory
 		KernelFactory(const KernelFactory&) = delete;
 		KernelFactory& operator=(const KernelFactory&) = delete;
-
 
 		inline static KernelFactory& getInstance() noexcept
 		{

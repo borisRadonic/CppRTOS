@@ -167,7 +167,7 @@ namespace CppRtos
 				 // Set a PendSV to request a context switch.
 				enterCritical();
 				NVIC_ICSR = ICSR_PENDSVSET_BIT;
-				this->exitCritical();
+				exitCritical();
 
 				//NVIC_ICSR |= ICSR_PENDSVSET_BIT;
 		        //__asm volatile ( "dsb" ::: "memory" );

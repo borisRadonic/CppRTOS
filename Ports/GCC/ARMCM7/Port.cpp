@@ -15,15 +15,53 @@
 
 	extern "C" void PendSV_Handler( void );
 
-	extern "C" void taskSwitchContext(void) noexcept __attribute__((section("privileged_functions")));
+	extern "C" void taskSwitchContext(void) noexcept/* __attribute__((section("privileged_functions")))*/;
 
+
+void vSetBASEPRI(std::uint32_t value)
+		{
+			__asm volatile
+			(
+					"   msr basepri, %0 " ::"r" ( value ) : "memory"
+			);
+		}
+
+		std::uint32_t raiseGetBASEPRI( void )
+		{
+			std::uint32_t origBasePri(0u);
+			std::uint32_t newBasePri(0u);
+			__asm volatile
+			(
+				"   mrs %0, basepri                                         \n" \
+				"   mov %1, %2                                              \n" \
+				"   cpsid i                                                 \n" \
+				"   msr basepri, %1                                         \n" \
+				"   isb                                                     \n" \
+				"   dsb                                                     \n" \
+				"   cpsie i                                                 \n" \
+				: "=r" ( origBasePri ), "=r" ( newBasePri ) : "i" ( MAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
+			);
+			return origBasePri;
+		}
+
+	CppRtos::Kernel* pKernel = nullptr; 
 	void taskSwitchContext() noexcept
 	{
+
 		/*call kernel function*/
-		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		//pKernel->enterCritical();
+		
+		if( pKernel == nullptr)
+		{
+			CppRtos::KernelFactory& kernelFact = CppRtos::KernelFactory::getInstance();
+			pKernel = kernelFact.getKernel();
+		}
+				
 		if( pKernel != nullptr )
 		{
+			if (reinterpret_cast<uintptr_t>(pKernel) <= 0x24000000)
+			{
+				return;
+			}
 			//store updated stack pointer
 			CppRtos::TaskData* ptrTaskData = pKernel->getCurrentTask();
 			ptrTaskData->setCurrentStackPtr( ptrCurrentTask->currentStackPtr );
@@ -37,7 +75,7 @@
 				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
 			//}
 		}
-		//pKernel->exitCritical();
+	
 	}
 
 
@@ -50,15 +88,17 @@
 		std::uint32_t uint32;
 	};
 
-
+	
 	void SVC_Handler( void )
 	{
+		uint32_t  pri = raiseGetBASEPRI();
 		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+		vSetBASEPRI( pri );
 		ConvertVoidPtrUin32 convert;
 		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
 		currentTaskDataAddr = convert.uint32;
 		ptrCurrentTask->currentStackPtr = convert.dataVoid;
-
+		
 	  	__asm volatile
 	    (
         	"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
@@ -89,83 +129,46 @@
 
 	}
 
-	extern "C" void HardFault_Handler(void)
-	{
-		while (1);  // Infinite loop to catch HardFault
-	}
 
-	extern "C" void MemManage_Handler(void)
-	{
-		while (1);  // Infinite loop to catch Memory Management Fault
-	}
-
-	extern "C" void BusFault_Handler(void)
-	{
-		while (1);  // Infinite loop to catch Bus Fault
-	}
-
-	extern "C" void UsageFault_Handler(void)
-	{
-		while (1);  // Infinite loop to catch Usage Fault
-	}
-
+	
 
 
 	void PendSV_Handler(void) 
-	{		
+	{			
 		 __asm volatile
 		 (
-		     "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
-		     "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-
-		     "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
-		     "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
-
-		     "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
-		     "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
-		     "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
-		    
-		     "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
-		     "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
-		    
-		     "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
-		     "   mov r0, %0                          \n" // Move the value of MAX_SYSCALL_INTERRUPT_PRIORITY into r0
-		     "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
-		     "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
-		     "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-		     "   bl taskSwitchContext               \n"  // Branch to the taskSwitchContext function (perform a context switch)
-
-			  "   .align 4                            \n" // Align the next data on a 4-byte boundary
-			  ::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
-		 );
-
- 		 uint32_t r0_value = 0u;
- 		 __asm volatile
-		 (
+		    "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
+		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+ 			"										\n"
+		    "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
+		    "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
+ 			"										\n"
+		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
+		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
+		    "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
+		    "										\n"
+		    "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
+		    "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
+		    "										\n"
+		    "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
+		    "   mov r0, %0                          \n" // Move the value of MAX_SYSCALL_INTERRUPT_PRIORITY into r0
+		    "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
+		    "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
+		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
+		    "   bl taskSwitchContext                \n"  // Branch to the taskSwitchContext function (perform a context switch)
 		    "   mov r0, #0                          \n" // Clear r0
 		    "   msr basepri, r0                     \n" // Clear the BASEPRI register (reset interrupt priority)
 		    "   ldmia sp!, {r0, r3}                 \n" // Load multiple registers (r0 and r3) from the stack and increment SP
-		    
+		    "										\n"
 		    "   ldr r1, [r3]                        \n" // Load the value at the address in r3 (i.e., the new TCB) into r1
 		    "   ldr r0, [r1]                        \n" // Load the stack pointer of the new task from the new TCB (pointed to by r1) into r0
-			: "=r" (r0_value)                         // Output operand to get the value of r0
-			:                                         // No input operands
-			: "r0", "r1", "r3", "memory"              // Clobbered registers
-			);
-
-			if (r0_value == 0)
-			{
-				return;
-			}
-
-		  __asm volatile
-		 (		  		    
+			"										\n"	  		    
 		    "   ldmia r0!, {r4-r11, r14}            \n" // Load multiple registers (r4-r11, r14) from the stack and increment r0
-		    
+		    "										\n"
 		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
 		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
 		    "   vldmiaeq r0!, {s16-s31}             \n" // If using FPU context, load the high VFP registers (s16-s31) and increment r0
-		    
+		    "										\n"
 		    "   msr psp, r0                         \n" // Move the updated stack pointer (r0) into the Process Stack Pointer (PSP)
 		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
 		    
@@ -173,9 +176,9 @@
 			"           push { r14 }                \n" // Push r14 onto the stack
 			"           pop { pc }                  \n" // Pop the value from the stack into the Program Counter (pc)
 		    #endif
-		
+		 	"										\n"
 		    "   bx r14                              \n" // Branch to the address in r14 (return from exception)
-		    
+		    "										\n"
 		    "   .align 4                            \n" // Align the next data on a 4-byte boundary
 		    "ptrCurrentTaskConst: .word ptrCurrentTask  \n" // Define a word containing the address of pxCurrentTCB
 		    ::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
@@ -235,16 +238,16 @@ extern "C" uint32_t SystemCoreClock;
 		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
 		}
 
+		
+
 		extern "C" void SysTick_Handler( void )
 		{
-			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-			pKernel->enterCritical();
-			pKernel->incrementTickCount();
-			if( pKernel->getTickCount() )
-			{
-				NVIC_ICSR = ICSR_PENDSVSET_BIT;
-			}
-			pKernel->exitCritical();
+			uint32_t  pri = raiseGetBASEPRI();
+			//CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+			//pKernel->incrementTickCount();
+			NVIC_ICSR = ICSR_PENDSVSET_BIT;
+			assert( pri != 10000 );
+			vSetBASEPRI( 0 );
 		}
 
 		void Port::validateInterruptPriority(void) const
