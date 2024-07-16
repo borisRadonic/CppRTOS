@@ -9,35 +9,32 @@ namespace CppRtos
 	namespace Port
 	{
 
+		/*ARM Cortex-M7*/
 
-	/*ARM Cortex-M7*/
+		/*NVIC (Nested Vectored Interrupt Controller):
+		The NVIC is a hardware component integrated into ARM Cortex-M processors,
+		providing a means to manage interrupts and exceptions in a system.*/
 
-	/*NVIC (Nested Vectored Interrupt Controller):
-	 The NVIC is a hardware component integrated into ARM Cortex-M processors,
-	 providing a means to manage interrupts and exceptions in a system.*/
+		/*Specific interrupts can be enabled or disabled using the Interrupt Set-Enable and Interrupt Clear-Enable Registers.*/
+		
+		/*The NVIC uses a vector table to determine the address of the interrupt service routines (ISRs).
+		Each interrupt has an entry in this table pointing to its corresponding ISR.*/
 
-	/*Specific interrupts can be enabled or disabled using the Interrupt Set-Enable and Interrupt Clear-Enable Registers.*/
-	
-	/*The NVIC uses a vector table to determine the address of the interrupt service routines (ISRs).
-	Each interrupt has an entry in this table pointing to its corresponding ISR.*/
+		/*The NVIC provides registers to set or clear the pending status of interrupts.
+		This allows software to manage the state of interrupts programmatically.
+		
+		The NVIC includes the SysTick timer, a system timer commonly used for creating time delays and generating periodic interrupts.
+		
+		Interrupt Set-Enable Register (ISER): Used to enable interrupts. Writing a '1' to a bit in this register enables the corresponding interrupt.
 
-	/*The NVIC provides registers to set or clear the pending status of interrupts.
-	 This allows software to manage the state of interrupts programmatically.
-	
-	The NVIC includes the SysTick timer, a system timer commonly used for creating time delays and generating periodic interrupts.
-	
-	Interrupt Set-Enable Register (ISER): Used to enable interrupts. Writing a '1' to a bit in this register enables the corresponding interrupt.
-
-	Interrupt Clear-Enable Register (ICER): Used to disable interrupts. Writing a '1' to a bit in this register disables the corresponding interrupt.
-	
-	Interrupt Set-Pending Register (ISPR): Used to set the pending status of interrupts. Writing a '1' to a bit in this register sets the corresponding interrupt as pending.
-	
-	Interrupt Clear-Pending Register (ICPR): Used to clear the pending status of interrupts. Writing a '1' to a bit in this register clears the corresponding interrupt from being pending.
-	
-	Interrupt Priority Registers (IPR): Used to set the priority level of interrupts. Each interrupt has a corresponding priority field in these registers.
-	*/
-
-
+		Interrupt Clear-Enable Register (ICER): Used to disable interrupts. Writing a '1' to a bit in this register disables the corresponding interrupt.
+		
+		Interrupt Set-Pending Register (ISPR): Used to set the pending status of interrupts. Writing a '1' to a bit in this register sets the corresponding interrupt as pending.
+		
+		Interrupt Clear-Pending Register (ICPR): Used to clear the pending status of interrupts. Writing a '1' to a bit in this register clears the corresponding interrupt from being pending.
+		
+		Interrupt Priority Registers (IPR): Used to set the priority level of interrupts. Each interrupt has a corresponding priority field in these registers.
+		*/
 
 		constexpr std::uint32_t  FIRST_USER_INTERRUPT_NUMBER  = 16u;
 
@@ -121,13 +118,8 @@ namespace CppRtos
 
 		constexpr std::uint32_t	NVIC_PENDSV_PRI =  ( ( ( uint32_t ) MIN_INTERRUPT_PRIORITY ) << 16UL );
 		constexpr std::uint32_t	NVIC_SYSTICK_PRI = ( ( ( uint32_t ) MIN_INTERRUPT_PRIORITY ) << 24UL );
-	
 
-		//constexpr std::uint32_t	NVIC_PENDSV_PRI =  (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_PENDSV_BITS;
-		//constexpr std::uint32_t	NVIC_SYSTICK_PRI = (MAX_SYSCALL_INT_PRIORIRY << (8u - PRIO_BITS)) << SHPR_PRIO_LSHIFT_SYSTICK_BITS;
-	
 		// Define the address of the FPCCR register (SCB_FPCCR)
-
 		#define PFPCCR *(( uint32_t *) 0xE000EF34 )
 
 		// Define the bits for ASPEN (Automatic State Preservation Enable) and LSPEN (Lazy State Preservation Enable)
@@ -164,47 +156,20 @@ namespace CppRtos
 
 			inline void yield()
 			{
-				 // Set a PendSV to request a context switch.
+				// Set a PendSV to request a context switch.
 				enterCritical();
 				NVIC_ICSR = ICSR_PENDSVSET_BIT;
 				exitCritical();
-
-				//NVIC_ICSR |= ICSR_PENDSVSET_BIT;
-		        //__asm volatile ( "dsb" ::: "memory" );
-		        //__asm volatile ( "isb" );
 			}
 
-			inline void disableInterrupts( void )  const
-			{
-				raiseGetBASEPRI();
-			}
-
-			inline void enableInterrupts( void ) const override
-			{
-				vSetBASEPRI(0u);
-			}
-
-			inline void enterCritical(void)  override
-			{
-				_nestingCounter++;
-				raiseGetBASEPRI(); //disable interrupts
-			}
-
-			inline void exitCritical(void) override
-			{
-				if( _nestingCounter != 0 )
-				{
-					//assert( _nestingCounter != 0)
-					//while(true) {};
-				}
-				
-				_nestingCounter--;
-				if( _nestingCounter == 0u )
-				{
-					enableInterrupts();
-				}
-			}
-
+			void disableInterrupts( void )  const override;
+			
+			void enableInterrupts( void ) const override;
+			
+			void enterCritical(void)  override;
+			
+			void exitCritical(void) override;
+			
 			inline void incrementTickCount()
 			{
 				_tickCount++;
@@ -229,47 +194,31 @@ namespace CppRtos
 			{
 				__asm volatile ( "" ::: "memory" );
 			}
-
-			void setupTimerInterrupt( void ) const override;
-
+			
 			void validateInterruptPriority(void) const override;
 
 			void startScheduler(void) override;
 
 			void endScheduler(void) const override;
 
-			void startFirstTask(void) const override;
-
-			void enableVFP(void) const override;
+			void startFirstTask(void) const;
 
 			void taskExitError(void) override;
 
 			void* initialiseStack(void* pxTopOfStack, void* pvParameters) override;
 
-
 		private:
 
-			void raiseBASEPRI( void ) const;
-
-			std::uint32_t raiseGetBASEPRI( void ) const;
-
-			inline void vSetBASEPRI(std::uint32_t value) const
-			{
-				__asm volatile
-				(
-						"   msr basepri, %0 " ::"r" ( value ) : "memory"
-				);
-			}
+			void setupTimerInterrupt( void ) const;
 
  			std::uint64_t 	_tickCount = 0u;
 
-        		std::uint64_t 	_sysTimerCount = 0u;
+        	std::uint64_t 	_sysTimerCount = 0u;
 
 			std::uint32_t _nestingCounter = 0u;
 
 			ARMCM7 _cpu;
-
-			void setPrivilegedMode(void);
+			
 		};
 	}
 }

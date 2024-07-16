@@ -11,45 +11,23 @@
 
 	CURRENT_TCB *ptrCurrentTask = &tcb;
 
-	extern "C" void SVC_Handler( void );
+	extern "C" void startInitialTask( void );
 
-	extern "C" void PendSV_Handler( void );
+	extern "C" void setPrivilegedMode( void );
 
 	extern "C" void taskSwitchContext(void) noexcept/* __attribute__((section("privileged_functions")))*/;
 
+	extern "C" std::uint32_t setInterruptPriorityAndGetOriginal( void );
 
-void vSetBASEPRI(std::uint32_t value)
-		{
-			__asm volatile
-			(
-					"   msr basepri, %0 " ::"r" ( value ) : "memory"
-			);
-		}
+	extern "C" void setInterruptBasePriority( std::uint32_t );
 
-		std::uint32_t raiseGetBASEPRI( void )
-		{
-			std::uint32_t origBasePri(0u);
-			std::uint32_t newBasePri(0u);
-			__asm volatile
-			(
-				"   mrs %0, basepri                                         \n" \
-				"   mov %1, %2                                              \n" \
-				"   cpsid i                                                 \n" \
-				"   msr basepri, %1                                         \n" \
-				"   isb                                                     \n" \
-				"   dsb                                                     \n" \
-				"   cpsie i                                                 \n" \
-				: "=r" ( origBasePri ), "=r" ( newBasePri ) : "i" ( MAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
-			);
-			return origBasePri;
-		}
+	extern "C" void enableVFP( void );
 
 	CppRtos::Kernel* pKernel = nullptr; 
+	
 	void taskSwitchContext() noexcept
 	{
-
 		/*call kernel function*/
-		
 		if( pKernel == nullptr)
 		{
 			CppRtos::KernelFactory& kernelFact = CppRtos::KernelFactory::getInstance();
@@ -57,30 +35,23 @@ void vSetBASEPRI(std::uint32_t value)
 		}
 				
 		if( pKernel != nullptr )
-		{
-			if (reinterpret_cast<uintptr_t>(pKernel) <= 0x24000000)
-			{
-				return;
-			}
+		{			
 			//store updated stack pointer
 			CppRtos::TaskData* ptrTaskData = pKernel->getCurrentTask();
 			ptrTaskData->setCurrentStackPtr( ptrCurrentTask->currentStackPtr );
 
 			pKernel->selectHighestPriorityTask();
 
-			//if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
-			//{
+			if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
+			{
 				//get new stack pointer and store to ptrCurrentTask
 				ptrTaskData = pKernel->getCurrentTask();			
 				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
-			//}
-		}
-	
+			}
+		}	
 	}
 
-
 	std::uint32_t currentTaskDataAddr = 0;
-
 
 	union ConvertVoidPtrUin32
 	{
@@ -89,165 +60,62 @@ void vSetBASEPRI(std::uint32_t value)
 	};
 
 	
-	void SVC_Handler( void )
-	{
-		uint32_t  pri = raiseGetBASEPRI();
-		CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		vSetBASEPRI( pri );
-		ConvertVoidPtrUin32 convert;
-		convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
-		currentTaskDataAddr = convert.uint32;
-		ptrCurrentTask->currentStackPtr = convert.dataVoid;
-		
-	  	__asm volatile
-	    (
-        	"   ldr r3, =currentTaskDataAddr    \n" /* Load the address of currentTaskDataAddr. */
-	  	);
-        __asm volatile
-		(
-			"   ldr r1, [r3]                    \n" /* Use currentTaskDataAddr to get the current task data address. */
-		);
-        __asm volatile
-		(
-			"   ldr r0, [r1]                    \n" /* The first item in the current task data is the task top of stack. */
-		);
-
-		__asm volatile
-		(
-        "   ldmia r0!, {r4-r11, r14}        \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count. */
-        "   msr psp, r0                     \n" /* Restore the task stack pointer. */
-        "   isb                             \n" /* Instruction Synchronization Barrier. */
-        "   mov r0, #0                      \n" /* Clear the BASEPRI register. */
-        "   msr basepri, r0                 \n" /* Restore interrupts. */
-		);
-		__asm volatile
-		(
-        "   bx r14                          \n" /* Return from the exception handler. */
-        "                                   \n"
-        "   .align 4                        \n"
-    	);
-
-	}
-
-
-	
-
-
-	void PendSV_Handler(void) 
-	{			
-		 __asm volatile
-		 (
-		    "   mrs r0, psp                         \n" // Move the current value of the Process Stack Pointer (PSP) into r0
-		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
- 			"										\n"
-		    "   ldr r3, ptrCurrentTaskConst         \n" // Load the address of ptrCurrentTask into r3
-		    "   ldr r2, [r3]                        \n" // Load the value of pxCurrentTCB (i.e., the current TCB) into r2
- 			"										\n"
-		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
-		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
-		    "   vstmdbeq r0!, {s16-s31}             \n" // If using FPU context, store the high VFP registers (s16-s31) and decrement r0
-		    "										\n"
-		    "   stmdb r0!, {r4-r11, r14}            \n" // Store multiple registers (r4-r11, r14) and decrement r0
-		    "   str r0, [r2]                        \n" // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
-		    "										\n"
-		    "   stmdb sp!, {r0, r3}                 \n" // Store r0 and r3 on the stack and decrement SP
-		    "   mov r0, %0                          \n" // Move the value of MAX_SYSCALL_INTERRUPT_PRIORITY into r0
-		    "   msr basepri, r0                     \n" // Move the value of r0 into the BASEPRI register (set interrupt priority)
-		    "   dsb                                 \n" // Data Synchronization Barrier to ensure all memory accesses complete
-		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-		    "   bl taskSwitchContext                \n"  // Branch to the taskSwitchContext function (perform a context switch)
-		    "   mov r0, #0                          \n" // Clear r0
-		    "   msr basepri, r0                     \n" // Clear the BASEPRI register (reset interrupt priority)
-		    "   ldmia sp!, {r0, r3}                 \n" // Load multiple registers (r0 and r3) from the stack and increment SP
-		    "										\n"
-		    "   ldr r1, [r3]                        \n" // Load the value at the address in r3 (i.e., the new TCB) into r1
-		    "   ldr r0, [r1]                        \n" // Load the stack pointer of the new task from the new TCB (pointed to by r1) into r0
-			"										\n"	  		    
-		    "   ldmia r0!, {r4-r11, r14}            \n" // Load multiple registers (r4-r11, r14) from the stack and increment r0
-		    "										\n"
-		    "   tst r14, #0x10                      \n" // Test if bit 4 of r14 (EXC_RETURN) is set (indicating FPU context)
-		    "   it eq                               \n" // If the zero flag is set (result of tst is zero), execute the next instruction
-		    "   vldmiaeq r0!, {s16-s31}             \n" // If using FPU context, load the high VFP registers (s16-s31) and increment r0
-		    "										\n"
-		    "   msr psp, r0                         \n" // Move the updated stack pointer (r0) into the Process Stack Pointer (PSP)
-		    "   isb                                 \n" // Instruction Synchronization Barrier to ensure subsequent instructions use updated values
-		    
-		    #if WORKAROUND_PMU_CM001 == 1
-			"           push { r14 }                \n" // Push r14 onto the stack
-			"           pop { pc }                  \n" // Pop the value from the stack into the Program Counter (pc)
-		    #endif
-		 	"										\n"
-		    "   bx r14                              \n" // Branch to the address in r14 (return from exception)
-		    "										\n"
-		    "   .align 4                            \n" // Align the next data on a 4-byte boundary
-		    "ptrCurrentTaskConst: .word ptrCurrentTask  \n" // Define a word containing the address of pxCurrentTCB
-		    ::"i" ( MAX_SYSCALL_INTERRUPT_PRIORITY )
-		);
-	}
-
-
 namespace CppRtos
 {
 	namespace Port
 	{
-		void Port::raiseBASEPRI( void ) const
+
+		extern "C" uint32_t SystemCoreClock;
+
+		void Port::disableInterrupts( void )  const
 		{
-			std::uint32_t basePri(0u);
-			__asm volatile
-			(
-				"   mov %0, %1                                              \n" \
-				"   cpsid i                                                 \n" \
-				"   msr basepri, %0                                         \n" \
-				"   isb                                                     \n" \
-				"   dsb                                                     \n" \
-				"   cpsie i                                                 \n" \
-				: "=r" ( basePri ) : "i" ( MAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
-			);
+			setInterruptPriorityAndGetOriginal();
 		}
 
-		std::uint32_t Port::raiseGetBASEPRI( void ) const
+		void Port::enableInterrupts( void ) const
 		{
-			std::uint32_t origBasePri(0u);
-			std::uint32_t newBasePri(0u);
-			__asm volatile
-			(
-				"   mrs %0, basepri                                         \n" \
-				"   mov %1, %2                                              \n" \
-				"   cpsid i                                                 \n" \
-				"   msr basepri, %1                                         \n" \
-				"   isb                                                     \n" \
-				"   dsb                                                     \n" \
-				"   cpsie i                                                 \n" \
-				: "=r" ( origBasePri ), "=r" ( newBasePri ) : "i" ( MAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
-			);
-			return origBasePri;
+			setInterruptBasePriority(0u);
 		}
 
+		inline void Port::enterCritical(void)
+		{
+			_nestingCounter++;
+			setInterruptPriorityAndGetOriginal(); //disable interrupts
+		}
 
-extern "C" uint32_t SystemCoreClock;
+		inline void Port::exitCritical(void)
+		{
+			if( _nestingCounter != 0 )
+			{
+				//assert( _nestingCounter != 0)
+				//while(true) {};
+			}
+			
+			_nestingCounter--;
+			if( _nestingCounter == 0u )
+			{
+				enableInterrupts();
+			}
+		}
 
 		void Port::setupTimerInterrupt( void ) const
 		{
 			SYSTICK_CTRL_REG 			= 0U; // Stop SysTick.
 			SYSTICK_CURRENT_VALUE_REG 	= 0U; // Reset the current value of the SysTick counter to 0
-		
 		 	// Configure SysTick
 			SYSTICK_LOAD_REG =  ((SystemCoreClock / Settings::TICK_RATE_HZ ) - 1u);
-
 			// Internal Clock, Enable SysTick Interrupt and Enable the SysTick counter
 		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
 		}
-
 		
-
 		extern "C" void SysTick_Handler( void )
 		{
-			uint32_t  pri = raiseGetBASEPRI();
-			//CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-			//pKernel->incrementTickCount();
+			uint32_t  pri = setInterruptPriorityAndGetOriginal();
+			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+			pKernel->incrementTickCount();
 			NVIC_ICSR = ICSR_PENDSVSET_BIT;
 			assert( pri != 10000 );
-			vSetBASEPRI( 0 );
+			setInterruptBasePriority( 0 );
 		}
 
 		void Port::validateInterruptPriority(void) const
@@ -273,8 +141,6 @@ extern "C" uint32_t SystemCoreClock;
 
 			this->startFirstTask();
 			/*It should never get here*/
-
-			
 		}
 
 		void Port::endScheduler(void) const
@@ -284,45 +150,21 @@ extern "C" uint32_t SystemCoreClock;
 
 		void Port::startFirstTask(void) const
 		{
-		__asm volatile (
-        " ldr r0, =0xE000ED08   \n" /* Load the address of the VTOR register. */
-        " ldr r0, [r0]          \n" /* Dereference to get the address of the vector table. */
-        " ldr r0, [r0]          \n" /* Dereference again to get the initial stack pointer value. */
-		);
-		__asm volatile (
-        " msr msp, r0           \n" /* Set the MSP back to the start of the stack. */
-        " mov r0, #0            \n" /* Clear the CONTROL register (set to privileged mode, use MSP). */
-        " msr control, r0       \n"
-        " cpsie i               \n" /* Enable interrupts. */
-        " cpsie f               \n" /* Enable fault interrupts. */
-        " dsb                   \n" /* Data Synchronization Barrier. */
-        " isb                   \n" /* Instruction Synchronization Barrier. */
-        " svc 0                 \n" /* System call to start first task. */
-        " nop                   \n" /* No operation (placeholder). */
-        " .ltorg                \n" /* Literal pool location directive. */
-    );
-		}
-
-		void Port::enableVFP(void)  const
-		{
-			__asm volatile
-			(
-				"   ldr.w r0, =0xE000ED88       \n" /* The FPU enable bits are in the CPACR. */
-				"   ldr r1, [r0]                \n"
-				"                               \n"
-				"   orr r1, r1, #( 0xf << 20 )  \n" /* Enable CP10 and CP11 coprocessors, then save back. */
-				"   str r1, [r0]                \n"
-				"   bx r14                      \n"
-				"   .ltorg                      \n"
-			);
+			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
+			ConvertVoidPtrUin32 convert;
+			convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
+			currentTaskDataAddr = convert.uint32;
+			ptrCurrentTask->currentStackPtr = convert.dataVoid;
+			startInitialTask();
 		}
 
 		void Port::taskExitError(void)
 		{
 			disableInterrupts();
-			while( true) {};
+			while( true)
+			{
+			};
 		}
-
 
 		extern "C" void callFirstTime(void)
 		{
@@ -421,19 +263,6 @@ extern "C" uint32_t SystemCoreClock;
 			 *topOfStack = 0x00000000u;
 			  topOfStack--;
 			 return static_cast<void*>(topOfStack);
-		}
-
-
-		void Port::setPrivilegedMode()
-		{
-			__asm volatile (
-				" mrs r0, control  \n" /* Read the current value of the CONTROL register */
-				" bic r0, r0, #1   \n" /* Clear the least significant bit to select privileged mode */
-				" msr control, r0  \n" /* Write the modified value back to the CONTROL register */
-				" isb              \n" /* Ensure the change takes effect immediately */
-			);
-		}
-
-	
+		}	
 	}
 }

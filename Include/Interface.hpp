@@ -8,7 +8,6 @@ class IPort
 {
 public:
 
-	
 	virtual bool isInsideInterrupt( void ) const = 0;
 
 	virtual void disableInterrupts( void )  const = 0;
@@ -20,19 +19,13 @@ public:
 	virtual void exitCritical(void) = 0;
 
 	virtual void memoryBarrier( void ) const = 0;
-
-	virtual void setupTimerInterrupt( void ) const = 0;
-
+	
 	virtual void validateInterruptPriority(void) const = 0;
 
 	virtual void startScheduler(void) = 0;
 
 	virtual void endScheduler(void)  const = 0;
-
-	virtual void startFirstTask(void)  const = 0;
-
-	virtual void enableVFP(void)  const = 0;
-
+	
 	virtual void taskExitError(void) = 0;
 
 	virtual void* initialiseStack(void* pxTopOfStack, void* pvParameters) = 0;

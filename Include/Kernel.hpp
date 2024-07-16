@@ -186,6 +186,7 @@ namespace CppRtos
 
 		inline void selectHighestPriorityTask() 
 		{
+			/*
 			static int task = 0;
 			if( task == 0 )
 			{
@@ -201,6 +202,7 @@ namespace CppRtos
 			}
 			_currentTask = _tasks[task];
 			return;
+			*/
 
 			TaskPriority currentPriority = _currentTask->getPriority();
 			//take next ready task with highest priority
