@@ -5,7 +5,6 @@
 #include <array>
 #include <string_view>
 #include <algorithm>
-
 #include "Config.hpp"
 
 namespace CppRtos
@@ -20,10 +19,11 @@ namespace CppRtos
 		eReady			= 0u,
 		eRunning		= 1u,
 		eBlocked		= 2u,
-		eSuspended		= 3u
+		eSuspended		= 3u,
+		eSleeping		= 4u		
 	};
 
-	enum class TaskPriority : uint8_t
+	enum class TaskPriority : std::uint8_t
 	{
 		PRIORITY_HIGHEST 			= 0u,    // Highest priority
 		PRIORITY_VERY_HIGH 			= 1u,
@@ -72,6 +72,7 @@ namespace CppRtos
 		, _id( 0u )
 		, _startStack (0u)
 		, _endStack( 0u )
+		, wakeUpTime( 0u )
 	    {
 			_name.fill(0);
 	    }
@@ -203,7 +204,9 @@ namespace CppRtos
         StackAddr _startStack = 0u; ///  Start of the stack
         StackAddr _endStack = 0u; /// End of the stack  ( ONly for recording purposes )
 
-		 ITask* taskInterfacePtr = nullptr;
+		ITask* taskInterfacePtr = nullptr;
+
+		std::uint64_t wakeUpTime = 0u;
 
 	};
 
@@ -215,23 +218,19 @@ namespace CppRtos
 	};
 
 
-    template<std::size_t STACK_SIZE>
     class Task : public ITask
     {
     public:
 
-    	Task()
-        {
-        	_stack.fill (0 );
-        	std::size_t start =  reinterpret_cast<std::size_t>( _stack.data() );
-        	_data.setStartStack( _stack.data() );
-        	_data.setTopStack( reinterpret_cast<void*>( start + _stack.size() ));
-			_data.setTaskInterfacePtr( static_cast<ITask*>(this) );
-        }
+		Task( std::uint8_t* stack, std::size_t size );
+		
+		Task();
+		
+		virtual ~Task();
 
-        virtual ~Task()
-        {
-        }
+		void setStack( std::uint8_t* stack, std::size_t size );
+             
+		void sleep(std::uint32_t ticks);
 
         inline void suspend()
         {
@@ -251,6 +250,11 @@ namespace CppRtos
         inline void unblock()
         {
         	_data.setState( TaskStateType::eReady );
+        }
+
+		inline void markAsRunning()
+        {
+        	_data.setState( TaskStateType::eRunning );
         }
 
         inline void setPriority( TaskPriority priority )
@@ -276,6 +280,6 @@ namespace CppRtos
     private:
 
         TaskData _data;
-        std::array<std::uint8_t, STACK_SIZE> _stack = {};
+        std::uint8_t* ptrStack = nullptr;
     };
 }

@@ -24,6 +24,7 @@ namespace CppRtos
 		eRunning = 2u,
 		eLocked = 3u,
 		eSuspended = 4u,
+		eSleeping = 5u,
 		eError = 0xFFu
 	};
 
@@ -44,18 +45,7 @@ namespace CppRtos
 		friend class KernelFactory;
     private:
 
-		Kernel()
-            :  _state( KernelState::eReset )
-			, _lastError( KernelError::eOK )			
-			, _taskCount (0u)
-        	{
-			_tasks.fill(nullptr);
-			
-			this->addTask( _idleTask );
-			_currentTask = _idleTask.getTaskData();
-
-			//Add Timer Task
-        	}
+		Kernel();
 
 		~Kernel()
 		{
@@ -66,60 +56,73 @@ namespace CppRtos
 		        Kernel(Kernel&&) = delete;
 		        Kernel& operator=(Kernel&&) = delete;
 
+	public:
 
-    public:
-	        template<std::size_t STACK_SIZE>
-	        void addTask( Task<STACK_SIZE>& task  )
-	        {
-	        	if( _taskCount < Settings::MAX_TASKS )
-	        	{
-	        		TaskData* ptrTaskData = task.getTaskData();
+		void addTask( Task& task  )
+		{			
+			if( taskCount < Settings::MAX_TASKS )
+			{
+				TaskData* ptrTaskData = task.getTaskData();
+				ptrTaskData->setId( taskCount );
+				tasks[taskCount] = ptrTaskData;
+				taskCount++;
+				
+				assert( taskCount <= Settings::MAX_TASKS );
+				//add task to the Ready List
+				port.enterCritical();
 
-	        		ptrTaskData->setId( _taskCount );
-	        		_tasks[_taskCount] = ptrTaskData;
-	        		_taskCount++;
-	
-	        		//add task to the Ready List
-	        		_port.enterCritical();
-								
-					StackAddr pStack = _port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
-					ptrTaskData->setCurrentStackPtr( pStack );
+				TaskPriority priority = ptrTaskData->getPriority();
 
-					std::size_t prio = static_cast<std::size_t>(ptrTaskData->getPriority());
-					assert( prio < _readyTasks.size() );
-					if( prio < _readyTasks.size() )
-					{
-						_readyTasks[prio].enqueue( ptrTaskData );
-					}
-					_port.exitCritical();
-	        	}
-	        }
+				if( priority > highestTaskPriority )
+				{
+					highestTaskPriority = priority;
+				}
+							
+				StackAddr pStack = port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
+				ptrTaskData->setCurrentStackPtr( pStack );
 
-		TaskData* getCurrentTask() const
+				std::size_t prio = static_cast<std::size_t>(priority);
+				assert( prio < readyTasks.size() );
+				if( prio < readyTasks.size() )
+				{
+					readyTasks[prio] = readyTasks[prio] | (1u << ptrTaskData->getId());
+				}
+				port.exitCritical();
+			}
+		}
+		
+		void addSleepingTask(TaskData* task, std::uint32_t ticks);
+
+		//this function is called only after entering critical section
+		void setTaskReady( CppRtos::TaskData * ptrTask );
+				
+
+		inline TaskData* getCurrentTask() const
 		{
-			return _currentTask;
+			return currentTask;
+		}
+
+		inline TaskData* getTaskById( std::uint32_t id ) const
+		{
+			if( id < Settings::MAX_TASKS )
+			{
+				return tasks[id];
+			}
+			return nullptr;
 		}
 		
         void initialize()
 		{
-			_state = KernelState::eReady;
+			state = KernelState::eReady;
 		}
 
-		void start()
-		{
-			initialize();
-			assert( _state == KernelState::eReady );
-			if( _state == KernelState::eReady)
-			{
-				_port.startScheduler();
-			}
-		}
+		void start();
 
 
         void lock()
 		{
 			//todo
-			_state = KernelState::eLocked;
+			state = KernelState::eLocked;
 		}
 
         void unLock()
@@ -128,194 +131,93 @@ namespace CppRtos
 			//_state = KernelState::eRunning; ???
 		}
 
-        	void suspend()
+        void suspend()
 		{
 		//todo
-			_state = KernelState::eSuspended;
+			state = KernelState::eSuspended;
 		}
 
-        	inline void incrementTickCount()
+        inline void incrementTickCount()
 		{
-			_port.incrementTickCount();
+			port.incrementTickCount();
 		}
 
-        	inline void incrementSysTimerCount()
+        inline void incrementSysTimerCount()
 		{
-			_port.incrementSysTimerCount();
+			port.incrementSysTimerCount();
 		}
 
 		inline std::uint64_t getTickCount() const
 		{
-			return _port.getTickCount();
+			return port.getTickCount();
 		}
 
 		inline std::uint64_t getSysTimerCount() const
 		{
-			return _port.getSysTimerCount();
+			return port.getSysTimerCount();
 		}
 
 		inline void disableInterrupts()
 		{
-			_port.disableInterrupts();
+			port.disableInterrupts();
 		}
 
 		inline void enableInterrupts()
 		{
-			_port.enableInterrupts();
+			port.enableInterrupts();
 		}
 
 		inline void enterCritical(void)
 		{
-			_port.enterCritical();
+			port.enterCritical();
 		}
 
 		inline void exitCritical(void)
 		{
-			_port.exitCritical();
+			port.exitCritical();
 		}
 
 		inline void yield()
 		{
-			_port.yield();
+			port.yield();
 		}
 		
 		inline bool isInsideInterrupt( void ) const
 		{
-			return _port.isInsideInterrupt();
+			return port.isInsideInterrupt();
 		}
 
-		inline void selectHighestPriorityTask() 
-		{
-			/*
-			static int task = 0;
-			if( task == 0 )
-			{
-				task = 1;
-			}
-			else if( task == 1 )
-			{
-				task = 2;
-			}
-			else
-			{
-				task = 0;
-			}
-			_currentTask = _tasks[task];
-			return;
-			*/
+		void selectHighestPriorityTask();
 
-			TaskPriority currentPriority = _currentTask->getPriority();
-			//take next ready task with highest priority
-			for (auto& task : _readyTasks)			
-			{
-				if( !task.isEmpty() )
-				{
-					TaskData* ptrTaskData = task.getAt(0);
-					/*check condition for preemption*/
-					if( _currentTask->getState() == TaskStateType::eRunning )
-					{
-						if( ptrTaskData->getPriority() >= currentPriority )
-						{	
-							TaskData* ptrTaskData = task.dequeue();
-							_currentTask = ptrTaskData;
-							//change the state of old Running task to Ready
-							ptrTaskData->setState( TaskStateType::eReady );
-							//add old task to list of ready tasks
-							std::size_t prio = static_cast<std::size_t>(currentPriority);
-							assert( prio < _readyTasks.size() );
-							if( prio < _readyTasks.size() )
-							{
-								_readyTasks[prio].enqueue( ptrTaskData );
-								break;
-							}
-						}
-					}
-					else
-					{
-						_currentTask = task.dequeue();
-						_currentTask->setState( TaskStateType::eRunning );
-						break;
-					}
-				}
-			}
-
-		}
-
-		using ReadyTasks = Fifo<TaskData*, Settings::MAX_TASKS>;
-
+		void tick();
+		
+		
     private:
 
-        KernelState 	_state = KernelState::eReset;
+        KernelState 	state = KernelState::eReset;
 
-        KernelError 	_lastError = KernelError::eOK;
+        KernelError 	lastError = KernelError::eOK;
       
-        std::array<TaskData*, Settings::MAX_TASKS> _tasks;
+        std::array<TaskData*, Settings::MAX_TASKS> tasks;
 		
-		std::array< ReadyTasks, MAX_PRIORY_LEVELS> _readyTasks = {};
+		//For max. MAX_PRIORY_LEVELS and max. 32 tasks
+		std::array<std::uint32_t, MAX_PRIORY_LEVELS> readyTasks = {};
 
-		TaskData* _currentTask = nullptr;
+		std::uint32_t priorityBitmap = 0u; // Bitmap to track non-empty priority levels
 
-		IdleTask _idleTask;
+		TaskData* currentTask = nullptr;
 
-				
-		std::size_t _taskCount = 0u;  // Current count of added tasks
+		TaskPriority highestTaskPriority = TaskPriority::PRIORITY_IDLE;
+	
+		std::size_t taskCount = 0u;  // Current count of added tasks
 
-        Port::Port _port;
+        Port::Port port;
+
+		IdleTask idleTask;
+
+		std::uint64_t sleepingTasksBitmap = 0u;
+        
+		std::array<std::uint64_t,Settings::MAX_TASKS> taskWakeUpTimes = {0u};
 
     };
-
-
-
-
-	class KernelFactory
-	{
-	private:
-
-		bool _isCreated = false;
-		Kernel* kernel = nullptr;
-
-		/**
-		* @brief Private constructor to prevent external instantiation.
-		*/
-		KernelFactory() : _isCreated(false), kernel(nullptr)
-		{
-		}
-
-	public:
-
-		// Prevent creating multiple instances of the KernelFactory
-		KernelFactory(const KernelFactory&) = delete;
-		KernelFactory& operator=(const KernelFactory&) = delete;
-
-		inline static KernelFactory& getInstance() noexcept
-		{
-			static KernelFactory instanceFactory; // This creates a single instance on first use
-			return instanceFactory;
-		}
-
-		inline Kernel* getKernel() noexcept
-		{
-			return kernel;
-		}
-
-		Kernel* create( void* platformMemory ) noexcept
-		{
-			if (_isCreated)
-			{
-				return nullptr;
-			}
-			_isCreated = true;
-			kernel = new(platformMemory) Kernel();
-			return kernel;
-		}
-
-		void destroy( void* platformMemory )
-		{
-			if (_isCreated)
-			{
-				static_cast<Kernel*>(platformMemory)->~Kernel();
-				_isCreated = false;
-			}
-		}
-	};
 }

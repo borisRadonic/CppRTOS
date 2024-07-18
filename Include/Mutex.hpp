@@ -5,8 +5,7 @@
 #include <array>
 #include <string_view>
 #include <algorithm>
-#include <atomic>
-#include "Kernel.hpp"
+#include "KernelFactory.hpp"
 #include "Config.hpp"
 #include "Fifo.hpp"
 #include <limits>
@@ -15,16 +14,18 @@ namespace CppRtos
 {
     enum class MutexResult : std::uint8_t
     {
-        Success  = 0u,
-        ErrorCalledFromISR  = 1u,
-        Timeout  = 2u
+        Success = 0u,
+        ErrorCalledFromISR = 1u,
+        Timeout = 2u,
+        AlreadyOwned = 3u,
+        NotOwner = 4u
     };
 
     class Mutex
     {
     public:
 
-        Mutex() : _count(0), owner_id ( std::numeric_limits<std::uint32_t>::max() )
+        Mutex() : count(0), owner ( nullptr )
         {
         }
 
@@ -45,121 +46,114 @@ namespace CppRtos
         MutexResult acquire(std::uint32_t ticksTimeout)
         {
             KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
-            Kernel* ptrKernel = ptrKernelFactory.getKernel();         
+            Kernel* ptrKernel = ptrKernelFactory.getKernel();
             assert( ptrKernel->isInsideInterrupt() == false );
-            if( !ptrKernel->isInsideInterrupt())
+
+            TaskData* ptrTaskData = ptrKernel->getCurrentTask();
+
+            if( owner == ptrTaskData )
             {
-                TaskData* ptrTaskData = ptrKernel->getCurrentTask();
-            
+                // Handle recursive mutex acquisition if needed
+                return MutexResult::AlreadyOwned;
+            }
+
+            if( !ptrKernel->isInsideInterrupt())
+            {                               
                 bool waitForever = (ticksTimeout == WAIT_FOREVER);
                 std::uint64_t end = ticksTimeout + ptrKernel->getTickCount();
 
                 while (true)
                 {
-                    if( !waitForever )
+                    ptrKernel->enterCritical();                   
+                    
+                    if (count <= 0)
                     {
-                        if( ptrKernel->getTickCount() > end)
-                        {
-                            return MutexResult::Timeout;
-                        }
-                    }
-                    std::int32_t expected = 0;  
-                    if (_count.compare_exchange_strong(expected, 1))
-                    {
-                        // The exchange was successful, _count is now 1
-                        owner_id = ptrTaskData->getId();
+                        //todo:this can be done with std::atomic, but there are some problems at the moment
+                        ptrKernel->enterCritical();
+                        count++;
+                        owner = ptrTaskData;
+                        ptrKernel->exitCritical();
                         return MutexResult::Success;
                     }
                     else
                     {
+                        if (!waitForever && ptrKernel->getTickCount() > end)
+                        {
+                            ptrKernel->exitCritical();
+                            return MutexResult::Timeout;
+                        }
 
-                         std::int32_t is = _count.load();
-                         is++;
-                         /*
-                            if ( _owner->getPriority() < ptrTaskData->getPriority() ) )
-                            {
-                                _owner->setPriority( ptrTaskData->getPriority() );
-                            }
-                            */
-                         ptrKernel->enterCritical();
-                        removeNonBlocked();
+                        if( owner->getPriority() < ptrTaskData->getPriority() )
+                        {
+                            owner->setPriority( ptrTaskData->getPriority() );
+                        }
+                      
+                         
                         if (!_blockedTasks.isFull())
                         {                           
                             // The exchange failed, expected now holds the current value of _count
                             ptrTaskData->setState( TaskStateType::eBlocked );
                             _blockedTasks.enqueue(ptrTaskData);
                         }
+
+                        ptrKernel->exitCritical();
+                        
                         // Switch context
                         ptrKernel->yield();
-                        continue;
                     }
                 }                
             }
             return MutexResult::ErrorCalledFromISR;
         }
 
-
         MutexResult release()
         {
             KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
             Kernel* ptrKernel = ptrKernelFactory.getKernel();
             assert( ptrKernel->isInsideInterrupt() == false );
+
+            if( owner == nullptr )
+            {
+                return MutexResult::Success;
+            }
+
             if( !ptrKernel->isInsideInterrupt())
             {
                 TaskData* ptrTaskData = ptrKernel->getCurrentTask();
 
-                if (( ptrTaskData != nullptr) && (ptrTaskData->getId() == owner_id) )
+                if (( ptrTaskData != nullptr) && (ptrTaskData == owner) )
                 {
                     // Disable interrupts
                     ptrKernel->enterCritical();
+                    
+                    count--;
+                    owner = nullptr;
 
-                    /*Remove tasks which are not blocked */
-                    //removeNonBlocked();
-
-                    _count.fetch_add(1);
-                    owner_id = std::numeric_limits<std:: uint32_t>::max();
                     if (!_blockedTasks.isEmpty())
                     {
                         TaskData* ptrUnblockedTask = _blockedTasks.dequeue();
-                        ptrUnblockedTask->setState( TaskStateType::eReady );
-                        // determine if the current owner task should reset to its original priority
+                        ptrKernel->setTaskReady(ptrUnblockedTask);
+
+                        // Restore the original priority if needed
                         if (!isAnyTaskBlocking(ptrUnblockedTask->getPriority()))
                         {
                             ptrTaskData->resetPriority();
                         }
+                        
                     }
+                    ptrKernel->exitCritical();
                     // Switch context
                     ptrKernel->yield();
-
-                    // Enable interrupts
-                    ptrKernel->exitCritical();
+                    return MutexResult::Success;
                 }
-                return MutexResult::Success;
+                return MutexResult::NotOwner;
             }
             return MutexResult::ErrorCalledFromISR;
-        }       
+        }
+
 
     private:
 
-        std::atomic<std::int32_t> _count = 0;
-
-        std::uint32_t owner_id = std::numeric_limits<std::uint32_t>::max();
-
-        Fifo<TaskData*, Settings::MAX_TASKS> _blockedTasks = {};
-
-
-        void removeNonBlocked()
-        {           
-            for (size_t i = 0; i < _blockedTasks.getSize(); ++i)
-            {
-                TaskData* ptrTask = _blockedTasks.getAt( i );
-                if( (ptrTask != nullptr) && (ptrTask->getState() != TaskStateType::eBlocked) )
-                {
-                    _blockedTasks.removeAt(i);
-                }             
-            }
-        }
- 
         bool isAnyTaskBlocking(CppRtos::TaskPriority priority)
         {
             // Check if any tasks in the blocked queue have the given priority           
@@ -174,5 +168,9 @@ namespace CppRtos
             return false;
         }
        
+       private:
+            std::int32_t count = 0;
+            TaskData* owner = nullptr;
+            Fifo<TaskData*, Settings::MAX_TASKS> _blockedTasks = {};
     };
 }

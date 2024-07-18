@@ -141,11 +141,14 @@ void FPU_init(void)
 		while (1);  // Infinite loop to catch Usage Fault
 	}
 
-class Task1 : public CppRtos::Task<2048>
+static std::aligned_storage_t<2048,4> _stack_task1;
+static std::aligned_storage_t<2048,4> _stack_task2;
+
+class Task1 : public CppRtos::Task
 {
 public:
 
-	Task1():CppRtos::Task<2048>()
+	Task1():CppRtos::Task(_stack_task1.__data, 2048)
 	{
 
 	}
@@ -154,27 +157,34 @@ public:
 
 	void run() override
 	{
+     int a = 0;
 		while(true)
 		{
-      int a = 0;
-        mutex->acquire(1000);
-        for ( int i = 0 ; i < 1000000; i++ )
+      auto result = mutex->acquire(1000);
+      if (result == CppRtos::MutexResult::Success)
+      {
+        for ( int i = 0 ; i < 10000; i++ )
         {
           a++;
         }
         a = 0;
         mutex->release();
+      }
+      else
+      {
+        a = 0;
+      }
 		}
 	}
 };
 
 
 
-class Task2 : public CppRtos::Task<4096>
+class Task2 : public CppRtos::Task
 {
 public:
 
-	Task2():CppRtos::Task<4096>()
+	Task2():CppRtos::Task( _stack_task2.__data, 2048 )
 	{
 
 	}
@@ -186,13 +196,21 @@ public:
     int a = 0;
 		while(true)
 		{
-      mutex->acquire(1000);
-      for ( int i = 0 ; i < 1000000; i++ )
+      auto result = mutex->acquire(1000);
+      if (result == CppRtos::MutexResult::Success)
       {
-        a++;
+        for ( int i = 0 ; i < 10000; i++ )
+        {
+          a++;
+        }
+        a = 0;
+        mutex->release();
+        this->sleep(5000);
       }
-      a = 0;
-      mutex->release();
+      else
+      {
+        a = 0;
+      }
 		}
 	}
 };
@@ -276,32 +294,30 @@ void SystemClock_Config(void)
 int main(void)
 {
 
-int a = 0;
-a++;
-	SCB_EnableICache();
-	HAL_Init();
+    int a = 0;
+    a++;
+    SCB_EnableICache();
+	  HAL_Init();
 
-	SystemClock_Config();
+	  SystemClock_Config();
 
-	FPU_init();
-
-
-	CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
-	CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
-
-  std::memset(&_prealoc_task1, 0xDE, sizeof(Task1));
-  std::memset(&_prealoc_barier, 0xDE, 1024);
+	  FPU_init();
 
 
- 
-  CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
-  Task1* task1 = new(&_prealoc_task1) Task1;
-  Task2* task2 = new(&_prealoc_task2) Task2;
+    CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
+    CppRtos::Kernel* ptrKernel = kernelFactory.create( &_prealoc_kernel_mem );
 
+    std::memset(&_prealoc_task1, 0xDE, sizeof(Task1));
+    std::memset(&_prealoc_barier, 0xDE, 1024);
 
- 
-  task1->mutex = mutex;
-  task2->mutex = mutex;
+  
+    CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
+    Task1* task1 = new(&_prealoc_task1) Task1();
+    Task2* task2 = new(&_prealoc_task2) Task2();
+
+  
+    task1->mutex = mutex;
+    task2->mutex = mutex;
 
 
   std::string_view taskName1 = "Task 1";

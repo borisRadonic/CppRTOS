@@ -25,7 +25,7 @@ namespace CppRtos
             {
         	    _buffer[_tail] = item;
 	            _tail = (_tail + 1) % MAX_ITEMS;
-	            _size.fetch_add(1);
+	            _size++;
 	        }
         }
 
@@ -35,7 +35,7 @@ namespace CppRtos
  	        {
         	    T item = _buffer[_head];
 	            _head = (_head + 1) % MAX_ITEMS;
-	            _size.fetch_sub(1);
+	            _size--;
         	    return item;
             }
 		    return nullptr;
@@ -58,7 +58,7 @@ namespace CppRtos
                 _buffer[i] = _buffer[next];
             }
             _tail = (_tail - 1 + MAX_ITEMS) % MAX_ITEMS;
-            _size.fetch_sub(1);
+            _size--;
         }
 
         inline bool isEmpty() const
@@ -79,6 +79,6 @@ namespace CppRtos
         std::array<T, MAX_ITEMS> _buffer = {};
         std::size_t _head = 0u;
         std::size_t _tail = 0u;
-        std::atomic<std::size_t> _size = 0u;
+        std::size_t _size = 0u;
     };
 }

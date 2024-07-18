@@ -1,5 +1,6 @@
 #include "Port.hpp"
 #include "Config.hpp"
+#include "KernelFactory.hpp"
 #include "Kernel.hpp"
 
 	struct CURRENT_TCB
@@ -33,7 +34,6 @@
 			CppRtos::KernelFactory& kernelFact = CppRtos::KernelFactory::getInstance();
 			pKernel = kernelFact.getKernel();
 		}
-				
 		if( pKernel != nullptr )
 		{			
 			//store updated stack pointer
@@ -48,7 +48,7 @@
 				ptrTaskData = pKernel->getCurrentTask();			
 				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
 			}
-		}	
+		}
 	}
 
 	std::uint32_t currentTaskDataAddr = 0;
@@ -113,6 +113,7 @@ namespace CppRtos
 			uint32_t  pri = setInterruptPriorityAndGetOriginal();
 			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
 			pKernel->incrementTickCount();
+			pKernel->tick();
 			NVIC_ICSR = ICSR_PENDSVSET_BIT;
 			assert( pri != 10000 );
 			setInterruptBasePriority( 0 );

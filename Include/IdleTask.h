@@ -2,18 +2,18 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <array>
-#include "Config.hpp"
+#include <type_traits>
 #include "Task.hpp"
 
 namespace CppRtos
 {
+    constexpr std::size_t IDLE_TASK_STACK_SIZE = 1024u;
 
-    class IdleTask : public Task<Settings::IDLE_TASK_STACK_SIZE>
+    class IdleTask : public Task
     {
     public:
 
-    	IdleTask(): Task<Settings::IDLE_TASK_STACK_SIZE>()
+    	IdleTask(): Task( static_cast<std::uint8_t*>(this->stack.__data), IDLE_TASK_STACK_SIZE )
         {        	
         }
 
@@ -28,5 +28,8 @@ namespace CppRtos
                            
             }
         }
+
+        public: 
+            std::aligned_storage_t<IDLE_TASK_STACK_SIZE,4u> stack;
     };
 }
