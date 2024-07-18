@@ -9,12 +9,22 @@ namespace CppRtos
     , taskCount (0u)
     {
         tasks.fill(nullptr);
-        
+        timers.fill(nullptr);
+
         this->addTask( idleTask );
         currentTask = idleTask.getTaskData();
     }
 
-    
+    void Kernel::updateTimers()
+    {
+        for (auto timer : timers)
+        {
+            if (timer != nullptr)
+            {
+                timer->tick();
+            }
+        }
+    }
 
     //this function is called only after entering critical section
     void Kernel::setTaskReady( CppRtos::TaskData * ptrTask )
@@ -31,6 +41,34 @@ namespace CppRtos
             }
         }
     }
+
+    bool Kernel::addTimer(Timer* timer)
+    {
+        for (auto& t : timers)
+        {
+            if (t == nullptr)
+            {
+                t = timer;
+                timer->allocate();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void Kernel::removeTimer(Timer* timer)
+    {
+        for (auto& t : timers)
+        {
+            if (t == timer)
+            {
+                t->deallocate();
+                t = nullptr;
+                return;
+            }
+        }
+    }
+
 
     void Kernel::start()
     {
@@ -102,5 +140,6 @@ namespace CppRtos
                 sleepingTasksBitmap &= ~(1ULL << i);
             }
         }
+        updateTimers();
     }
 }

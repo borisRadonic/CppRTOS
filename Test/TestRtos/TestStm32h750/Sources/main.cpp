@@ -22,6 +22,7 @@
 #include "Port.hpp"
 #include "Task.hpp"
 #include "Kernel.hpp"
+#include "Timer.hpp"
 #include "Mutex.hpp"
 #include <memory>
 
@@ -37,7 +38,13 @@ void FPU_init(void)
     SCB->CPACR |= ((3UL << 20) | (3UL << 22));
 }
 
+void timerCallback1(void* test)
+{
+}
 
+void timerCallback2(void* test)
+{
+}
 	
     extern "C" void hard_fault_handler_c(unsigned int * hardfault_args)
     {
@@ -220,6 +227,10 @@ static std::aligned_storage_t<sizeof(Task1),4> _prealoc_task1;
 static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task2;
 static std::aligned_storage_t<1024,4> _prealoc_barier;
 static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
+static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer1;
+static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer2;
+
+
 
 
 void Error_Handler(void)
@@ -297,11 +308,11 @@ int main(void)
     int a = 0;
     a++;
     SCB_EnableICache();
-	  HAL_Init();
+    HAL_Init();
 
-	  SystemClock_Config();
+    SystemClock_Config();
 
-	  FPU_init();
+    FPU_init();
 
 
     CppRtos::KernelFactory& kernelFactory  = CppRtos::KernelFactory::getInstance();
@@ -310,32 +321,46 @@ int main(void)
     std::memset(&_prealoc_task1, 0xDE, sizeof(Task1));
     std::memset(&_prealoc_barier, 0xDE, 1024);
 
-  
+
     CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
     Task1* task1 = new(&_prealoc_task1) Task1();
     Task2* task2 = new(&_prealoc_task2) Task2();
 
-  
+
     task1->mutex = mutex;
     task2->mutex = mutex;
 
 
-  std::string_view taskName1 = "Task 1";
-	task1->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
-	task1->setName( taskName1);
-  ptrKernel->addTask(*task1);
+    std::string_view taskName1 = "Task 1";
+    task1->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
+    task1->setName( taskName1);
+    ptrKernel->addTask(*task1);
 
-  std::string_view taskName2 = "Task 2";
-	task2->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
-	task2->setName( taskName2);
- 	ptrKernel->addTask(*task2);
+    std::string_view taskName2 = "Task 2";
+    task2->setPriority( CppRtos::TaskPriority::PRIORITY_LOW );
+    task2->setName( taskName2);
+    ptrKernel->addTask(*task2);
 
-	ptrKernel->start();
+    CppRtos::Timer* timer1 = new(&_prealoc_timer1) CppRtos::Timer(timerCallback1, 3000, true, nullptr);
+    CppRtos::Timer* timer2 = new(&_prealoc_timer2) CppRtos::Timer(timerCallback2, 3000, true, nullptr);
+ 
+
+    if (ptrKernel->addTimer(timer1))
+    {
+      timer1->start();
+    }
+
+    if (ptrKernel->addTimer(timer2))
+    {
+      timer2->start();
+    }
+
+    ptrKernel->start();
 
 
 
-	//CppRtos::Port::Port port;
+    //CppRtos::Port::Port port;
 
 
-	for(;;);
+    for(;;);
 }

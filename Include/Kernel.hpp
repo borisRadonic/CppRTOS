@@ -5,11 +5,11 @@
 #include <array>
 #include <assert.h>
 #include <functional>
-
-#include "Task.hpp"
 #include "Port.hpp"
 #include "Config.hpp"
-#include "IdleTask.h"
+#include "Task.hpp"
+#include "Timer.hpp"
+#include "IdleTask.hpp"
 #include "Fifo.hpp"
 
 namespace CppRtos
@@ -56,6 +56,8 @@ namespace CppRtos
 		        Kernel(Kernel&&) = delete;
 		        Kernel& operator=(Kernel&&) = delete;
 
+		void updateTimers();
+
 	public:
 
 		void addTask( Task& task  )
@@ -95,7 +97,10 @@ namespace CppRtos
 
 		//this function is called only after entering critical section
 		void setTaskReady( CppRtos::TaskData * ptrTask );
-				
+
+		bool addTimer(Timer* timer);
+
+        void removeTimer(Timer* timer);		
 
 		inline TaskData* getCurrentTask() const
 		{
@@ -218,6 +223,8 @@ namespace CppRtos
 		std::uint64_t sleepingTasksBitmap = 0u;
         
 		std::array<std::uint64_t,Settings::MAX_TASKS> taskWakeUpTimes = {0u};
+
+		std::array<Timer*, Settings::MAX_TIMERS> timers = {nullptr};
 
     };
 }
