@@ -27,6 +27,8 @@
 #include "Mutex.hpp"
 #include <memory>
 
+#include "MessageQueue.hpp"
+
 #include "stm32h7xx_hal.h"
 #include "stm32h7xx_hal_pwr_ex.h"
 
@@ -231,7 +233,15 @@ static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer2;
 
+struct TestMsg
+{
+  int id;
+  char text[99];
+  /* data */
+};
 
+
+CppRtos::MessageQueue<TestMsg, 30> msgQueue1;
 
 
 void Error_Handler(void)

@@ -3,137 +3,211 @@
 #include <cstdint>
 #include <cstddef>
 #include <array>
-#include <string_view>
 #include <algorithm>
-#include <atomic>
+#include "KernelFactory.hpp"
 #include "Kernel.hpp"
+#include "Mutex.hpp"
 #include "Config.hpp"
 
 namespace CppRtos
-{   
-    template<typename T, std::size_t MAX_ITEMS>
+{
+
+    enum class MsgQueueResult : std::uint8_t
+    {
+        Success = 0u,
+        ErrorQueueFull = 1u,
+        ErrorQueueEmpty = 2u,
+        ErrorCalledFromISR = 3u,
+        Timeout = 4u
+    };
+   
+ /**
+     * @brief MessageQueue class for intertask communication in a Real-Time Operating System (RTOS).
+     * 
+     * The MessageQueue class provides a mechanism for tasks and interrupt service routines (ISRs) to send and receive messages.
+     * Messages are queued in a first-in-first-out (FIFO) order. Multiple tasks can send to and receive from the same message queue.
+     */
+    template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
     class MessageQueue
     {
     public:
-        MessageQueue() : _head(0), _tail(0), _size(0)
-        {
-            KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
-            _ptrKernel = ptrKernelFactory.getKernel();
-        }
+        /**
+         * @brief Constructs a MessageQueue.
+         */
+        MessageQueue();
 
-        // Adds an item to the queue
-        void send(const T& item)
-        {
-            assert( _ptrKernel->isInsideInterrupt() == false );
-            if( !_ptrKernel->isInsideInterrupt())
-            {
-                while (true)
-                {
-                    // Wait if the queue is full
-                    if (_size.load() < MAX_ITEMS)
-                    {
-                        // Disable interrupts
-                        _ptrKernel->disableInterrupts();
-                        if (_size.load() < MAX_ITEMS)
-                        {
-                            _buffer[tail] = item;
-                            _tail = (tail + 1) % MAX_ITEMS;
-                            _size.fetch_add(1);
-                            
-                            // Enable interrupts
-                            _ptrKernel->enableInterrupts();
+        /**
+         * @brief Sends a message to the message queue.
+         * 
+         * @param message The message to send.
+         * @param timeout The number of ticks to wait for free space if the message queue is full.
+         * @return MsgQueueResult The result of the send operation.
+         * - MsgQueueResult::Success: The message was successfully sent.
+         * - MsgQueueResult::ErrorQueueFull: The message queue is full and no space is available.
+         * - MsgQueueResult::ErrorCalledFromISR: The send operation was called from an ISR with a timeout other than NoWait.
+         * - MsgQueueResult::Timeout: The send operation timed out before space became available.
+         */
+        MsgQueueResult send(const T_MESSAGE& message, std::uint32_t timeout);
 
-                            break;
-                        }
-                        // Enable interrupts
-                        _ptrKernel->enableInterrupts();
-                    }
-                    // Optionally yield to other tasks
-                    _ptrKernel->yield();
-                }
-            }
-        }
-        bool sendFromISR(const T& item)
-        {
-            assert( _ptrKernel->isInsideInterrupt() );
-            if( _ptrKernel->isInsideInterrupt())
-            {
-                if (_size.load() < MAX_ITEMS)
-                {
-                    // Disable interrupts
-                    _ptrKernel->disableInterrupts();
+        /**
+         * @brief Receives a message from the message queue.
+         * 
+         * @param message The buffer to copy the received message into.
+         * @param timeout The number of ticks to wait for a message if the queue is empty.
+         * @return MsgQueueResult The result of the receive operation.
+         * - MsgQueueResult::Success: The message was successfully received.
+         * - MsgQueueResult::ErrorQueueEmpty: The message queue is empty and no message is available.
+         * - MsgQueueResult::ErrorCalledFromISR: The receive operation was called from an ISR, which is not allowed.
+         * - MsgQueueResult::Timeout: The receive operation timed out before a message became available.
+         */
+        MsgQueueResult receive(T_MESSAGE& message, std::uint32_t timeout);
 
-                    _buffer[tail] = item;
-                    _tail = (tail + 1) % MAX_ITEMS;
-                    _size.fetch_add(1);
-
-                    // Enable interrupts
-                    _ptrKernel->enableInterrupts();
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Removes an item from the queue
-        T receive( int timeout /*todo:timeout*/)
-        {
-            assert( _ptrKernel->isInsideInterrupt() == false );
-            if( !_ptrKernel->isInsideInterrupt())
-            {
-                while (true)
-                {
-                    // Wait if the queue is empty
-                    if (_size.load() > 0u)
-                    {
-                        // Disable interrupts
-                        _ptrKernel->disableInterrupts();
-
-                        if (_size.load() > 0u)
-                        {
-                            T item = _buffer[_head];
-                            _head = (_head + 1u) % MAX_ITEMS;
-                            _size.fetch_sub(1u);
-                            
-                            // Enable interrupts
-                            _ptrKernel->enableInterrupts();
-
-                            return item;
-                        }
-                        // Enable interrupts
-                        _ptrKernel->enableInterrupts();
-                    }
-                    // Optionally yield to other tasks  ///todo: ?????
-                    _ptrKernel->yield();
-                }
-            }
-            return nullptr;
-        }
-
-        // Checks if the queue is empty
-        bool isEmpty() const
-        {
-            return ( _size.load() == 0u );
-        }
-
-        // Checks if the queue is full
-        bool isFull() const
-        {
-            return ( _size.load() == MAX_ITEMS );
-        }
-
-        // Returns the current size of the queue
-        std::size_t getSize() const
-        {
-            return _size.load();
-        }
+        /**
+         * @brief Gets the number of messages currently queued.
+         * 
+         * @return std::size_t The number of messages currently queued.
+         */
+        std::size_t getNumMsg() const;
 
     private:
-        std::array<T, MAX_ITEMS> _buffer = {};
-        std::atomic<std::size_t> _head;
-        std::atomic<std::size_t> _tail;
-        std::atomic<std::size_t> _size;
-
-        Kernel* _ptrKernel = nullptr;
+        Fifo<T_MESSAGE, MAX_MESSAGES> queue; /**< Fifo for storing messages */
+        mutable Mutex mtx; /**< Mutex to protect access to the queue */
     };
+
+    template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
+    MessageQueue<T_MESSAGE, MAX_MESSAGES>::MessageQueue()
+    {       
+    }
+
+    template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
+    MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::send(const T_MESSAGE& message, std::uint32_t timeout)
+    {
+        KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
+        Kernel* ptrKernel = ptrKernelFactory.getKernel();
+
+        if (ptrKernel->isInsideInterrupt() && (timeout != 0u) )
+        {
+            return MsgQueueResult::ErrorCalledFromISR;
+        }
+
+        if (mtx.acquire(timeout) != MutexResult::Success)
+        {
+            return MsgQueueResult::Timeout;
+        }
+
+        if (queue.isFull())
+        {
+            if (timeout == 0u)
+            {
+               mtx.release(); 
+               return MsgQueueResult::ErrorQueueFull;
+            }
+            else if (timeout == WAIT_FOREVER)
+            {
+                // Wait indefinitely until space is available
+                while (queue.isFull())
+                {
+                    mtx.release();
+                    ptrKernel->yield();
+                    if (mtx.acquire(timeout) != MutexResult::Success)
+                    {
+                        return MsgQueueResult::Timeout;
+                    }
+                }
+            }
+            else
+            {
+                // Wait for the specified timeout
+                std::uint64_t end = ptrKernel->getTickCount() + timeout;
+                while (queue.isFull())
+                {
+                    if (ptrKernel->getTickCount() > end)
+                    {
+                        mtx.release();
+                        return MsgQueueResult::Timeout;
+                    }
+                    mtx.release();
+                    ptrKernel->yield();
+                    if (mtx.acquire(timeout) != MutexResult::Success)
+                    {
+                        return MsgQueueResult::Timeout;
+                    }
+                }
+            }
+        }
+        // Queue the message
+        queue.enqueue(message);
+        mtx.release();
+        return MsgQueueResult::Success;
+    }
+
+    template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
+    MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::receive(T_MESSAGE& message, std::uint32_t timeout)
+    {
+        KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
+        Kernel* ptrKernel = ptrKernelFactory.getKernel();
+
+        if (ptrKernel->isInsideInterrupt())
+        {
+            return MsgQueueResult::ErrorCalledFromISR;
+        }
+
+        if (mtx.acquire(timeout) != MutexResult::Success)
+        {
+            return MsgQueueResult::Timeout;
+        }
+       
+        if (queue.isEmpty())
+        {
+            if (timeout == 0u)
+            {
+                mtx.release();
+                return MsgQueueResult::ErrorQueueEmpty;
+            }
+            else if (timeout == WAIT_FOREVER)
+            {
+                // Wait indefinitely until a message is available
+                while (queue.isEmpty())
+                {
+                    mtx.release();
+                    ptrKernel->yield();
+                    if(mtx.acquire(timeout) != MutexResult::Success)
+                    {
+                        return MsgQueueResult::Timeout;
+                    }
+                }
+            }
+            else
+            {
+                // Wait for the specified timeout
+                std::uint64_t end = ptrKernel->getTickCount() + timeout;
+                while (queue.isEmpty())
+                {
+                    if (ptrKernel->getTickCount() > end)
+                    {
+                         mtx.release();
+                        return MsgQueueResult::Timeout;
+                    }
+                    mtx.release();
+                    ptrKernel->yield();
+                    if (mtx.acquire(timeout) != MutexResult::Success)
+                    {
+                        return MsgQueueResult::Timeout;
+                    }
+                }                
+            }
+        }
+         // Dequeue the message
+        message = queue.dequeue();
+        mtx.release();
+        return MsgQueueResult::Success;
+
+       
+    }
+
+    template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
+    std::size_t MessageQueue<T_MESSAGE, MAX_MESSAGES>::getNumMsg() const
+    {        
+        return queue.getSize();
+    }
 }
