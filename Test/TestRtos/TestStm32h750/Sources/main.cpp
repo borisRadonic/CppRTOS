@@ -21,6 +21,7 @@
 #include <cstring>
 #include "Port.hpp"
 #include "Task.hpp"
+#include "KernelFactory.hpp"
 #include "Kernel.hpp"
 #include "Timer.hpp"
 #include "Mutex.hpp"
