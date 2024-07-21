@@ -11,7 +11,6 @@
 
 namespace CppRtos
 {
-
     enum class MsgQueueResult : std::uint8_t
     {
         Success = 0u,
@@ -200,14 +199,18 @@ namespace CppRtos
          // Dequeue the message
         message = queue.dequeue();
         mtx.release();
-        return MsgQueueResult::Success;
-
-       
+        return MsgQueueResult::Success;   
     }
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
     std::size_t MessageQueue<T_MESSAGE, MAX_MESSAGES>::getNumMsg() const
     {        
-        return queue.getSize();
+        if (mtx.acquire(WAIT_FOREVER) != MutexResult::Success)
+        {
+            return 0u;
+        }
+        std::size_t numMsg = queue.getSize();
+        mtx.release();
+        return numMsg;
     }
 }
