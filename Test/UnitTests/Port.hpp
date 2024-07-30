@@ -1,11 +1,27 @@
 #pragma once
 #include <assert.h>
 #include "Interface.hpp"
+#include <exception>
+#include <string>
 
 /*Only for Unit Tests*/
 
 namespace CppRtos
 {
+
+	class UnitTestException : public std::exception
+	{
+	public:
+		explicit UnitTestException(const std::string& message) : message_(message) {}
+		
+		virtual const char* what() const noexcept override
+		{
+			return message_.c_str();
+		}
+	private:
+		std::string message_;
+	};
+
 	namespace Port
 	{
 		class Port : public IPort
@@ -35,7 +51,7 @@ namespace CppRtos
 			inline void yield()
 			{
 				//this is trick to come back in Test (used for Mutex, Semaphore and Queue tests)
-				throw new std::exception("yield");
+				throw UnitTestException("yield");
 			}
 
 			void disableInterrupts(void)  const override

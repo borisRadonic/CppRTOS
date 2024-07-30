@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
+
 project(TestRtos C CXX ASM)
+
 
 # Include toolchain settings
 set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/rtos-gcc.cmake" CACHE STRING "Toolchain file")
@@ -10,18 +12,21 @@ message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-###################### CONSTANTS ######################################
-set(PROJECT_NAME "TestRtos")
-set(PROJECT_TYPE_EXECUTABLE "exe")
-set(PROJECT_TYPE_STATIC_LIBRARY "static-lib")
-set(RUNTIME_LIBRARY_FLAGS "--specs=nano.specs")
-set(RUNTIME_LIBRARY_SYSCALLS_FLAGS "--specs=nosys.specs")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message(STATUS "Real Time Platform")
+    ###################### CONSTANTS ######################################
+    set(PROJECT_NAME "TestRtos")
+    set(PROJECT_TYPE_EXECUTABLE "exe")
+    set(PROJECT_TYPE_STATIC_LIBRARY "static-lib")
+    set(RUNTIME_LIBRARY_FLAGS "--specs=nano.specs")
+    set(RUNTIME_LIBRARY_SYSCALLS_FLAGS "--specs=nosys.specs")
 
-# Platforms
-set(PLATFORM_STM32H7 "stm32h7")
-set(PLATFORM_ZYNQ "zynq7")
+    # Platforms
+    set(PLATFORM_STM32H7 "stm32h7")
+    set(PLATFORM_ZYNQ "zynq7")
 
-set(HW_PLATFORM "stm32h7")
+    set(HW_PLATFORM "stm32h7")
+endif()
 
 if(${HW_PLATFORM} STREQUAL ${PLATFORM_STM32H7})
     set(MFLOAT_ABI_FLAGS "-mfloat-abi=hard")

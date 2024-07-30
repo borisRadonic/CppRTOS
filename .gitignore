@@ -36,3 +36,4 @@ Debug
 Packages
 cmake-build-debug
 out
+cmake-build-ut-debug-mingw

@@ -42,6 +42,28 @@ namespace CppRtos
         }
     }
 
+    void Kernel::resetTaskReady(CppRtos::TaskData* ptrTask, TaskStateType newState)
+    {
+        if (ptrTask != nullptr)
+        {
+            // Only reset if the task is currently in the ready state
+            if (ptrTask->getState() == TaskStateType::eReady)
+            {
+                std::size_t prio = static_cast<std::size_t>(ptrTask->getPriority());
+                assert(prio < readyTasks.size());
+                if (prio < readyTasks.size())
+                {
+                    readyTasks[prio] &= ~(1u << ptrTask->getId());
+                    if (readyTasks[prio] == 0)
+                    {
+                        priorityBitmap &= ~(1u << prio);
+                    }                    
+                }
+            }
+            ptrTask->setState(newState);
+        }
+    }
+
     bool Kernel::addTimer(Timer* timer)
     {
         for (auto& t : timers)
@@ -92,8 +114,8 @@ namespace CppRtos
     {
         port.enterCritical();
         //take next ready task with highest priority
-        std::uint8_t startPrio = static_cast<std::uint8_t>(highestTaskPriority);			
-        for (std::uint8_t countPrio = startPrio; countPrio < static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE); countPrio++ )			
+        std::uint8_t startPrio = static_cast<std::uint8_t>(highestTaskPriority);
+        for (std::uint8_t countPrio = startPrio; countPrio < static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE); countPrio++ )
         {
             std::uint32_t taskBitList = readyTasks[countPrio];
             std::uint8_t countTask = 0u;
@@ -101,7 +123,7 @@ namespace CppRtos
             {
                 if(  taskBitList & 1u )
                 {
-                    TaskData* ptrTaskData = tasks[countTask];						
+                    TaskData* ptrTaskData = tasks[countTask];
                     // Preempt the current running task if necessary						
                     if( currentTask->getState() == TaskStateType::eRunning)
                     {
@@ -116,6 +138,7 @@ namespace CppRtos
                     if( readyTasks[countPrio] == 0u )
                     {
                         priorityBitmap &= ~(1u << countPrio);
+
                     }
                     port.exitCritical();
                     return;						

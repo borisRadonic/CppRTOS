@@ -71,7 +71,10 @@ namespace CppRtos
                     if (!_blockedTasks.isFull())
                     {                           
                         // The exchange failed, expected now holds the current value of _count
-                        ptrTaskData->setState( TaskStateType::eBlocked );
+                        if (ptrTaskData->getState() == TaskStateType::eReady)
+                        {
+                            ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
+                        }
                         _blockedTasks.enqueue(ptrTaskData);
                     }
 

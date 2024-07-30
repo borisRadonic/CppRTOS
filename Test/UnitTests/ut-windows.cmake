@@ -1,0 +1,24 @@
+
+
+
+set (CMAKE_SYSTEM_PROCESSOR "arm" CACHE STRING "")
+set (CMAKE_SYSTEM_NAME "Generic" CACHE STRING "")
+
+# Skip link step during toolchain validation.
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+
+
+
+# No optimization for Debug
+set(CMAKE_C_FLAGS_DEBUG    "-g3 -O0 -DDEBUG" CACHE STRING "C debug flags")
+set(CMAKE_CXX_FLAGS_DEBUG  "-g3 -O0 -DDEBUG" CACHE STRING "CXX debug flags")
+set(CMAKE_ASM_FLAGS_DEBUG  "-g3 -O0 -DDEBUG" CACHE STRING "ASM debug flags")
+
+# Optimize on size for Release
+set(CMAKE_C_FLAGS_RELEASE      "-Os -DNDEBUG" CACHE STRING "C release flags")
+set(CMAKE_CXX_FLAGS_RELEASE    "-Os -DNDEBUG" CACHE STRING "CXX release flags")
+set(CMAKE_ASM_FLAGS_RELEASE    "-Os -DNDEBUG" CACHE STRING "ASM release flags")

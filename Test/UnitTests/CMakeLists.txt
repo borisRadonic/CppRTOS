@@ -3,6 +3,17 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
+set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/windows.cmake" CACHE STRING "Toolchain file")
+
+# Set compilers and system-specific settings at the top
+project(CppRtosUT LANGUAGES C CXX ASM)
+
+
+
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(CMAKE_BUILD_TYPE Debug)
 
 
@@ -12,6 +23,7 @@ include(FetchContent)
 FetchContent_Declare(
   googletest
   URL https://github.com/google/googletest/archive/refs/tags/v1.15.0.zip
+  DOWNLOAD_EXTRACT_TIMESTAMP true
 )
 
 # For Windows: Prevent overriding the parent project's compiler/linker settings
@@ -23,7 +35,13 @@ FetchContent_MakeAvailable(googletest)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 17)
 
-project(CppRtosUT LANGUAGES C CXX ASM)
+
+
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+  message(STATUS "Configuring for Windows")
+endif()
+
 
 set(UT_SOURCES
     ${PROJECT_SOURCE_DIR}/Scheduling_Test.cpp   
@@ -50,7 +68,7 @@ set(INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../../Include  
 )
 
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
+#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
 
 add_executable              (CppRtosUT ${UT_SOURCES} ${CODE_UNDER_TEST_SOURCES})
 

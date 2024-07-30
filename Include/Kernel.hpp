@@ -98,6 +98,8 @@ namespace CppRtos
 		//this function is called only after entering critical section
 		void setTaskReady( CppRtos::TaskData * ptrTask );
 
+		void resetTaskReady(CppRtos::TaskData* ptrTask, TaskStateType newState);
+
 		bool addTimer(Timer* timer);
 
         void removeTimer(Timer* timer);		
@@ -240,7 +242,7 @@ namespace CppRtos
 
 		TaskPriority highestTaskPriority = TaskPriority::PRIORITY_IDLE;
 	
-		std::size_t taskCount = 0u;  // Current count of added tasks
+		std::uint8_t taskCount = 0u;  // Current count of added tasks
 
         Port::Port port;
 

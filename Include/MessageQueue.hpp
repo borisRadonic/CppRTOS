@@ -170,6 +170,8 @@ namespace CppRtos
                 {
                     mtx.release();
                     ptrKernel->yield();
+
+                    /*todo:test*/
                     if(mtx.acquire(timeout) != MutexResult::Success)
                     {
                         return MsgQueueResult::Timeout;

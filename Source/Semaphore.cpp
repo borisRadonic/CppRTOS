@@ -42,9 +42,9 @@ namespace CppRtos
                             return SemResult::Timeout;
                         }
                     }
-                    TaskData* ptrTaskData = ptrKernel->getCurrentTask();
+                    TaskData* ptrTaskData = ptrKernel->getCurrentTask();                                        
+                    ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
 
-                    ptrTaskData->setState(TaskStateType::eBlocked);
                     waitingQueue.enqueue(ptrTaskData);
                     ptrKernel->exitCritical();
 
