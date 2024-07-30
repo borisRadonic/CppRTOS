@@ -25,6 +25,7 @@
 #include "Kernel.hpp"
 #include "Timer.hpp"
 #include "Mutex.hpp"
+#include "Semaphore.hpp"
 #include <memory>
 
 #include "MessageQueue.hpp"
@@ -153,6 +154,9 @@ void timerCallback2(void* test)
 
 static std::aligned_storage_t<2048,4> _stack_task1;
 static std::aligned_storage_t<2048,4> _stack_task2;
+static std::aligned_storage_t<2048,4> _stack_task3;
+
+CppRtos::Semaphore* semaphore1;
 
 class Task1 : public CppRtos::Task
 {
@@ -216,6 +220,7 @@ public:
         a = 0;
         mutex->release();
         this->sleep(5000);
+        semaphore1->flush();
       }
       else
       {
@@ -225,13 +230,53 @@ public:
 	}
 };
 
+
+
+
+class Task3 : public CppRtos::Task
+{
+public:
+
+	Task3():CppRtos::Task(_stack_task3.__data, 2048)
+	{
+	}
+
+  CppRtos::Mutex* mutex;
+
+	void run() override
+	{
+     int a = 0;
+		while(true)
+		{
+      auto result = semaphore1->acquire(6000);
+      if (result == CppRtos::SemResult::Success)
+      {
+        for ( int i = 0 ; i < 10000; i++ )
+        {
+          a++;
+        }
+        a = 0;
+      }
+      else
+      {
+        a = 0;
+      }
+		}
+	}
+};
+
+
 static std::aligned_storage_t<sizeof(CppRtos::Kernel),4> _prealoc_kernel_mem;
 static std::aligned_storage_t<sizeof(Task1),4> _prealoc_task1;
 static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task2;
+static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task3;
+
+
 static std::aligned_storage_t<1024,4> _prealoc_barier;
 static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer2;
+static std::aligned_storage_t<sizeof(CppRtos::Semaphore),4> _prealoc_semaphore1;
 
 struct TestMsg
 {
@@ -334,9 +379,14 @@ int main(void)
 
 
     CppRtos::Mutex* mutex = new(&_prealoc_mutex1) CppRtos::Mutex;
+    
+    semaphore1 = new(&_prealoc_semaphore1)  CppRtos::Semaphore(1,0);
+
     Task1* task1 = new(&_prealoc_task1) Task1();
     Task2* task2 = new(&_prealoc_task2) Task2();
+    Task3* task3 = new(&_prealoc_task3) Task3();
 
+    
 
     task1->mutex = mutex;
     task2->mutex = mutex;
@@ -352,10 +402,14 @@ int main(void)
     task2->setName( taskName2);
     ptrKernel->addTask(*task2);
 
+    std::string_view taskName3 = "Task 3";
+    task3->setPriority( CppRtos::TaskPriority::PRIORITY_MODERATELY_LOW );
+    task3->setName( taskName3);
+    ptrKernel->addTask(*task3);
+
     CppRtos::Timer* timer1 = new(&_prealoc_timer1) CppRtos::Timer(timerCallback1, 3000, true, nullptr);
     CppRtos::Timer* timer2 = new(&_prealoc_timer2) CppRtos::Timer(timerCallback2, 3000, true, nullptr);
  
-
     if (ptrKernel->addTimer(timer1))
     {
       timer1->start();

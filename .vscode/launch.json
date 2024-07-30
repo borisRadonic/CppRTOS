@@ -19,25 +19,56 @@
             "svdFile": "C:/DevTools/cmsis/STMicroelectronics_CMSIS_SVD/STM32F765.svd",
             "swoConfig": {},
             "showDevDebugOutput": "raw"
-           
-    },
-    {
-        "name": "STlink Attach",
-        "cwd": "${workspaceFolder}",
-        "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
-        "request": "attach",
-        "type": "cortex-debug",
-        "servertype": "stlink",
-        //"gdbPath": "C:\\path\\to\\your\\gdb\\bin\\arm-none-eabi-gdb.exe",
-        "serverpath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550\\tools\\bin\\ST-LINK_gdbserver.exe",
-        "gdbTarget": "localhost:50000",
-        "device": "STM32F765II",
-        "interface": "swd",
-        "runToEntryPoint": "SystemInit",
-        "preLaunchTask": "CMake: Build",
-        "svdFile": "",
-        "swoConfig": {},
-        "showDevDebugOutput": "raw"
-    }
-]
+        },
+        {
+            "name": "STlink Attach",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/Debug/TestRtos.elf",
+            "request": "attach",
+            "type": "cortex-debug",
+            "servertype": "stlink",
+            //"gdbPath": "C:\\path\\to\\your\\gdb\\bin\\arm-none-eabi-gdb.exe",
+            "serverpath": "C:\\ST\\STM32CubeIDE_1.13.1\\STM32CubeIDE\\plugins\\com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.win32_2.1.0.202305091550\\tools\\bin\\ST-LINK_gdbserver.exe",
+            "gdbTarget": "localhost:50000",
+            "device": "STM32F765II",
+            "interface": "swd",
+            "runToEntryPoint": "SystemInit",
+            "preLaunchTask": "CMake: Build",
+            "svdFile": "",
+            "swoConfig": {},
+            "showDevDebugOutput": "raw"
+        },
+        {
+            "name": "Qemu Debug ARM Cortex-M7",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Debug/TestRtos.elf",
+            "miDebuggerServerAddress": "localhost:1234",
+            "miDebuggerPath": "C:\\DevTools\\Arm-GNU-Toolchain-arm-none-eabi\\13.2\\bin\\arm-none-eabi-gdb.exe",
+            "targetArchitecture": "arm",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+            "launchCompleteCommand": "exec-continue",
+            "logging": {
+                "engineLogging": true,
+                "trace": true,
+                "traceResponse": true
+            },
+            "externalConsole": false,
+            "MIMode": "gdb",
+            //"preLaunchTask": "Run QEMU",
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": true
+        }
+    ]
 }
