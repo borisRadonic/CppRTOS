@@ -13,7 +13,7 @@ namespace CppRtos
     {
     public:
 
-    	IdleTask(): Task( static_cast<std::uint8_t*>(this->stack.__data), IDLE_TASK_STACK_SIZE )
+    	IdleTask(): Task(static_cast<std::uint8_t*>(static_cast<void*>(&stack)), IDLE_TASK_STACK_SIZE)
         {        	
         }
 
