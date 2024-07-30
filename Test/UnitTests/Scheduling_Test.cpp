@@ -1,28 +1,88 @@
-﻿// CMakeProject1.cpp : Defines the entry point for the application.
-//
+﻿#include <gmock/gmock.h>
+#include "KernelFactory.hpp"
+#include "Kernel.hpp"
+#include "Task.hpp"
+#include "Port.hpp"
 
-#include <gtest/gtest.h>
 
-// Include your kernel header here if needed
-// #include "Kernel.h"
+using namespace CppRtos;
+using ::testing::Return;
+using ::testing::_;
 
-// Example function to test
-int add(int a, int b)
+
+class MockTask : public Task
 {
-    return a + b;
+public:
+    MOCK_METHOD(void, run, (), (override));
+};
+
+// Test Fixture
+class KernelTest : public ::testing::Test
+{
+   
+
+public:
+    std::aligned_storage_t<sizeof(CppRtos::Kernel), 4> _prealoc_kernel_mem;
+    Kernel* kernel;
+    Port::Port port;
+    MockTask mockTask1;
+    MockTask mockTask2;
+       
+
+    void SetUp() override
+    {
+        
+        CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
+        
+        kernel = kernelFactory.create(&_prealoc_kernel_mem);
+ 
+        mockTask1.setPriority( TaskPriority::PRIORITY_HIGH );
+        mockTask2.setPriority( TaskPriority::PRIORITY_MEDIUM_HIGH );
+
+        kernel->addTask(mockTask1);
+        kernel->addTask(mockTask2);
+       
+    }
+
+    void TearDown() override
+    {
+        CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
+        kernelFactory.destroy(&_prealoc_kernel_mem);
+    }
+
+
+};
+
+TEST_F(KernelTest, SelectHighestPriorityTask_SelectsCorrectTask)
+{
+    TaskData* ptrTaskData1 = mockTask1.getTaskData();
+    TaskData* ptrTaskData2 = mockTask2.getTaskData();
+
+    kernel->setTaskReady(ptrTaskData1);
+    kernel->setTaskReady(ptrTaskData2);
+
+    kernel->selectHighestPriorityTask();
+
+    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
 }
 
-// Test cases
-TEST(AdditionTest, HandlesPositiveInput)
+TEST_F(KernelTest, SelectHighestPriorityTask_PreemptsCurrentTask)
 {
-    EXPECT_EQ(add(1, 2), 3);
-    EXPECT_EQ(add(5, 6), 11);
-}
+    TaskData* ptrTaskData1 = mockTask1.getTaskData();
+    TaskData* ptrTaskData2 = mockTask2.getTaskData();
 
-TEST(AdditionTest, HandlesNegativeInput)
-{
-    EXPECT_EQ(add(-1, -2), -3);
-    EXPECT_EQ(add(-5, -6), -11);
+    kernel->setTaskReady(ptrTaskData1);
+    kernel->setTaskReady(ptrTaskData2);
+    kernel->selectHighestPriorityTask(); // taskData1 is running
+    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+
+    kernel->selectHighestPriorityTask();
+
+    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2);
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eRunning);
 }
 
 int main(int argc, char** argv)

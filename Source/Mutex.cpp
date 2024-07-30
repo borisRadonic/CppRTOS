@@ -44,7 +44,7 @@ namespace CppRtos
 
             while (true)
             {
-                ptrKernel->enterCritical();                   
+                ptrKernel->enterCritical();
                 
                 if (count <= 0)
                 {

@@ -196,6 +196,32 @@ namespace CppRtos
 
 		void tick();
 		
+		TaskData* getTask(std::size_t index) const
+		{
+			if (index < tasks.size())
+			{
+				return tasks[index];
+			}
+			return nullptr;
+		}
+
+		void setTask(std::size_t index, TaskData* taskData)
+		{
+			if (index < tasks.size())
+			{
+				tasks[index] = taskData;
+			}
+		}
+
+		void setCurrentTask(TaskData* task)
+		{
+			currentTask = task;
+		}
+
+		std::array<TaskData*, Settings::MAX_TASKS>& getTasks()
+		{
+			return tasks;
+		}
 		
     private:
 

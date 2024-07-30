@@ -27,6 +27,7 @@ project(CppRtosUT LANGUAGES C CXX ASM)
 
 set(UT_SOURCES
     ${PROJECT_SOURCE_DIR}/Scheduling_Test.cpp   
+    ${PROJECT_SOURCE_DIR}/Port.cpp
 )
 
 
@@ -49,8 +50,9 @@ set(INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../../Include  
 )
 
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
 
-add_executable              (CppRtosUT ${UT_SOURCES} ${CODE_UNDER_TEST_SOURCES} "port.cpp")
+add_executable              (CppRtosUT ${UT_SOURCES} ${CODE_UNDER_TEST_SOURCES})
 
 target_include_directories  (CppRtosUT PRIVATE ${INCLUDE_DIRS})
 

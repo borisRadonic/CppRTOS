@@ -22,13 +22,20 @@ namespace CppRtos
 			{
 			}
 
+			inline void unitTestSetisInsideInterrupt(bool value)
+			{
+				insideInterrupt = value;
+			}
+
 			inline bool isInsideInterrupt(void) const override
 			{
-				return false;
+				return insideInterrupt;
 			}
 
 			inline void yield()
 			{
+				//this is trick to come back in Test (used for Mutex, Semaphore and Queue tests)
+				throw new std::exception("yield");
 			}
 
 			void disableInterrupts(void)  const override
@@ -105,7 +112,7 @@ namespace CppRtos
 
 			std::uint64_t 	_sysTimerCount = 0u;
 
-			//std::uint32_t _nestingCounter = 0u;
+			bool insideInterrupt = false;;
 
 
 

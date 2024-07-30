@@ -1,29 +1,18 @@
 #pragma once
 
-#include "kernel.hpp"
+#include "Kernel.hpp"
 
 namespace CppRtos
 {
 
 	class KernelFactory
 	{
-	private:
-
-		bool _isCreated = false;
-		Kernel* kernel = nullptr;
-
-		/**
-		* @brief Private constructor to prevent external instantiation.
-		*/
-		KernelFactory() : _isCreated(false), kernel(nullptr)
-		{
-		}
-
+	
 	public:
 
 		// Prevent creating multiple instances of the KernelFactory
-		KernelFactory(const KernelFactory&) = delete;
-		KernelFactory& operator=(const KernelFactory&) = delete;
+		//KernelFactory(const KernelFactory&) = delete;
+		//KernelFactory& operator=(const KernelFactory&) = delete;
 
 		inline static KernelFactory& getInstance() noexcept
 		{
@@ -55,5 +44,17 @@ namespace CppRtos
 				_isCreated = false;
 			}
 		}
+	private:
+
+		bool _isCreated = false;
+		Kernel* kernel = nullptr;
+
+		KernelFactory() = default;
+		~KernelFactory() = default;
+		KernelFactory(const KernelFactory&) = delete;
+		KernelFactory& operator=(const KernelFactory&) = delete;
+		KernelFactory(KernelFactory&&) = delete;
+		KernelFactory& operator=(KernelFactory&&) = delete;
+
 	};
 }
