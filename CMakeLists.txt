@@ -81,6 +81,7 @@ set(PROJECT_INCLUDES
     ${CMAKE_SOURCE_DIR}/Include
     ${CMAKE_SOURCE_DIR}/${TEST_INC_PATH}
     ${CMAKE_SOURCE_DIR}/${PORT_PATH}
+
     ${CMAKE_SOURCE_DIR}/${HAL_PATH}
     ${CMAKE_SOURCE_DIR}/${CMSIS_PATH}
     ${CMAKE_SOURCE_DIR}/${DEVICE_PATH}
@@ -109,7 +110,7 @@ endif()
 target_compile_definitions(${PROJECT_NAME} PRIVATE STM32H750xx) # Add the define here
 
 # Define common flags as a list of separate items
-set(COMMON_FLAGS -mthumb -Wall -Werror)
+#set(COMMON_FLAGS -mthumb -Wall -Werror)
 
 # Define C and C++ compiler flags separately as lists of separate items
 set(C_FLAGS -std=gnu11 ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
@@ -147,7 +148,7 @@ set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 include_directories(${PROJECT_INCLUDES})
 
 # Define common flags as a list of separate items
-set(COMMON_FLAGS "-mthumb -Wall -Werror")
+#set(COMMON_FLAGS "-mthumb -Wall -Werror")
 set(CXX_FLAGS "-fno-threadsafe-statics -std=c++17 ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS}")
 
 # Construct include directories flags
@@ -165,16 +166,16 @@ set(PORT_ASM "${CMAKE_BINARY_DIR}/assembly/Port.s")
 
 set(GEN_S_CXX_FLAGS ${MCPU_FLAGS} ${MFPU_FLAGS} ${MFLOAT_ABI_FLAGS} ${RUNTIME_LIBRARY_FLAGS})
 
-add_custom_command(
-    OUTPUT ${PORT_ASM}
-    COMMAND ${CMAKE_CXX_COMPILER} ${COMMON_FLAGS} ${GEN_S_CXX_FLAGS} ${INCLUDE_DIRS} -S -o ${PORT_ASM} ${PORT_CPP}
-    DEPENDS ${PORT_CPP}
-    COMMENT "Generating assembly for Port.cpp"
-    USES_TERMINAL
-    VERBATIM
-)
+#add_custom_command(
+#    OUTPUT ${PORT_ASM}
+#    COMMAND ${CMAKE_CXX_COMPILER} ${COMMON_FLAGS} ${GEN_S_CXX_FLAGS} ${INCLUDE_DIRS} -S -o ${PORT_ASM} ${PORT_CPP}
+#    DEPENDS ${PORT_CPP}
+#    COMMENT "Generating assembly for Port.cpp"
+#    USES_TERMINAL
+#    VERBATIM
+#)
 
-add_custom_target(GeneratePortAssembly ALL DEPENDS ${PORT_ASM})
+#add_custom_target(GeneratePortAssembly ALL DEPENDS ${PORT_ASM})
 
 # Print the command for debugging
-message(STATUS "Custom command: ${CMAKE_CXX_COMPILER} ${CXX_FLAGS} ${COMMON_FLAGS} ${INCLUDE_DIRS} -S -o ${PORT_ASM} ${PORT_CPP}")
+#message(STATUS "Custom command: ${CMAKE_CXX_COMPILER} ${CXX_FLAGS} ${COMMON_FLAGS} ${INCLUDE_DIRS} -S -o ${PORT_ASM} ${PORT_CPP}")

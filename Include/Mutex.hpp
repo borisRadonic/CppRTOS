@@ -48,7 +48,38 @@ namespace CppRtos
          * Ensures no tasks are blocked when the mutex is destroyed.
          */
         ~Mutex();
-        
+
+        /**
+         * @brief Locks the mutex, blocking the calling task until the mutex is acquired.
+         *
+         * This method adheres to the interface expected by `std::lock_guard` and similar
+         * locking mechanisms in the C++ Standard Library. It will block the calling task
+         * indefinitely until the mutex is successfully acquired.
+         *
+         * @note The `lock()` method internally calls the `acquire()` method with a timeout
+         * value that indicates the task should wait indefinitely to acquire the mutex.
+         */
+        inline void lock()
+        {
+            // Call the acquire method with a timeout value that waits indefinitely
+            acquire(WAIT_FOREVER);  // Replace WAIT_FOREVER with your actual constant for indefinite wait
+        }
+
+        /**
+         * @brief Unlocks the mutex, allowing other tasks to acquire it.
+         *
+         * This method adheres to the interface expected by `std::lock_guard` and similar
+         * locking mechanisms in the C++ Standard Library. It releases the mutex, enabling
+         * other tasks that may be waiting for it to acquire the mutex.
+         *
+         * @note The `unlock()` method internally calls the `release()` method to release
+         * ownership of the mutex.
+         */
+        inline void unlock()
+        {
+            // Call the release method
+            release();
+        }
         /**
          * @brief Attempts to acquire the mutex, potentially blocking the task.
          * 

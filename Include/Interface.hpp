@@ -8,6 +8,9 @@ class IPort
 {
 public:
 
+	IPort() = default;
+
+
 	virtual bool isInsideInterrupt( void ) const = 0;
 
 	virtual void disableInterrupts( void )  const = 0;

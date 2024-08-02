@@ -50,10 +50,10 @@ namespace CppRtos
 
                     // Switch context
                     ptrKernel->yield();
+                    return SemResult::Success;
                     //
                 }
             }
-            return SemResult::Success;
         }
         return SemResult::ErrorCalledFromISR;
     }
