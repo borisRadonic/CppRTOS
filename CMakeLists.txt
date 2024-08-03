@@ -67,10 +67,13 @@ if(${HW_PLATFORM} STREQUAL ${PLATFORM_STM32H7})
         ${CMAKE_SOURCE_DIR}/${PORT_PATH}/PendHandlers.S
         ${CMAKE_SOURCE_DIR}/${PORT_PATH}/PortHwAssembly.S
         ${CMAKE_SOURCE_DIR}/Source/Kernel.cpp
+        ${CMAKE_SOURCE_DIR}/Source/EventGroup.cpp
         ${CMAKE_SOURCE_DIR}/Source/Task.cpp
         ${CMAKE_SOURCE_DIR}/Source/Mutex.cpp
         ${CMAKE_SOURCE_DIR}/Source/Semaphore.cpp
         ${CMAKE_SOURCE_DIR}/Source/Timer.cpp
+            Source/EventGroup.cpp
+            Include/EventGroup.h
     )
 elseif(${HW_PLATFORM} STREQUAL ${PLATFORM_ZYNQ})
     # Add ZYNQ specific sources here

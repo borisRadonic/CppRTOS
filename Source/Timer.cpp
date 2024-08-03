@@ -11,9 +11,8 @@ namespace CppRtos
           , running(false)
           , allocated(false)
           , arg(arg)
-        {
-        }
-
+   {
+   }
 
     void Timer::start()
     {

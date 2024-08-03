@@ -66,7 +66,8 @@ namespace CppRtos
 		: _currentStackPointer( nullptr )
 		, _priority( TaskPriority::PRIORITY_IDLE )
 		, _basePriority( TaskPriority::PRIORITY_IDLE )
-		, _numOfHeldMutexes( 0u )
+		//, _numOfHeldMutexes( 0u )
+		, flagsToWaitFor( 0u )
 		, _runCounter( 0u )
 		, _state(TaskStateType::eReady)
 		, _id( 0u )
@@ -86,6 +87,15 @@ namespace CppRtos
 			_priority = _basePriority;
 		}
 
+		inline void setFlagsToWaitFor( const std::uint32_t flags )
+		{
+			flagsToWaitFor = flags;
+		}
+
+		inline std::uint32_t getFlagsToWaitFor() const
+		{
+			return flagsToWaitFor;
+		}
 
 		inline void setTopStack( const StackAddr topStack)
 		{
@@ -190,7 +200,9 @@ namespace CppRtos
 		TaskPriority 	_priority = TaskPriority::PRIORITY_IDLE;
 
         TaskPriority 	_basePriority = TaskPriority::PRIORITY_IDLE; // Used for mutexes by priority inheritance logic
-        std::uint32_t 	_numOfHeldMutexes = 0u;
+        //std::uint32_t 	_numOfHeldMutexes = 0u;
+
+		std::uint32_t	flagsToWaitFor = 0u;
 
         std::uint64_t 	_runCounter = 0U;
 

@@ -48,7 +48,6 @@ namespace CppRtos
                 
                 if (count <= 0)
                 {
-                    //todo:this can be done with std::atomic, but there are some problems at the moment
                     ptrKernel->enterCritical();
                     count++;
                     owner = ptrTaskData;
