@@ -70,7 +70,7 @@ namespace CppRtos
                     if (!_blockedTasks.isFull())
                     {                           
                         // The exchange failed, expected now holds the current value of _count
-                        if (ptrTaskData->getState() == TaskStateType::eReady)
+                        if (ptrTaskData->getState() == TaskStateType::eRunning)
                         {
                             ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
                         }
@@ -134,7 +134,7 @@ namespace CppRtos
 
     bool Mutex::isAnyTaskBlocking(CppRtos::TaskPriority priority)
     {
-        // Check if any tasks in the blocked queue have the given priority           
+        // Check if any tasks in the blocked queue have the given priority
         for (size_t i = 0; i < _blockedTasks.getSize(); ++i)
         {   
             TaskData* ptrTask = _blockedTasks.getAt( i );  

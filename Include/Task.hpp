@@ -244,6 +244,8 @@ namespace CppRtos
              
 		void sleep(std::uint32_t ticks);
 
+		void yield();
+
         inline void suspend()
         {
         	_data.setState( TaskStateType::eSuspended );

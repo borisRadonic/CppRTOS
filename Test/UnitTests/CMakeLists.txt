@@ -3,10 +3,10 @@
 #
 cmake_minimum_required (VERSION 3.8)
 
-set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/windows.cmake" CACHE STRING "Toolchain file")
+#set(CMAKE_TOOLCHAIN_FILE "${CMAKE_SOURCE_DIR}/ut-windows.cmake" CACHE STRING "Toolchain file")
 
 # Set compilers and system-specific settings at the top
-project(CppRtosUT LANGUAGES C CXX ASM)
+project(CppRtosUT LANGUAGES C CXX ASM_MASM)
 
 
 
@@ -36,15 +36,26 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 17)
 
 
+# For Windows: Prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
   message(STATUS "Configuring for Windows")
+  # Enable MASM assembler for Visual Studio
+  enable_language(ASM_MASM)
+
+  # Use Visual Studio's native generator if possible
+  if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
+    set(CMAKE_GENERATOR "Visual Studio 17 2022")
+  endif()
 endif()
 
 
 set(UT_SOURCES
-    ${PROJECT_SOURCE_DIR}/Scheduling_Test.cpp   
+    ${PROJECT_SOURCE_DIR}/Scheduling_Test.cpp
+    ${PROJECT_SOURCE_DIR}/Mutex_Test.cpp
+    ${PROJECT_SOURCE_DIR}/Semaphore_Test.cpp
     ${PROJECT_SOURCE_DIR}/Port.cpp
 )
 
@@ -68,7 +79,12 @@ set(INCLUDE_DIRS
     ${PROJECT_SOURCE_DIR}/../../Include  
 )
 
-#set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
+# Set stack size, relevant for Windows
+if(MSVC)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /STACK:1048576")
+endif()
+
+
 
 add_executable              (CppRtosUT ${UT_SOURCES} ${CODE_UNDER_TEST_SOURCES})
 

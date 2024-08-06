@@ -108,6 +108,7 @@ namespace CppRtos
         sleepingTasksBitmap |= (1ULL << taskId);
         taskWakeUpTimes[taskId] = getTickCount() + ticks;
         task->setState(TaskStateType::eSleeping);
+
     }
 
     void Kernel::selectHighestPriorityTask() 
@@ -124,11 +125,12 @@ namespace CppRtos
                 if(  taskBitList & 1u )
                 {
                     TaskData* ptrTaskData = tasks[countTask];
-                    // Preempt the current running task if necessary						
-                    if( currentTask->getState() == TaskStateType::eRunning)
+                    // Preempt the current running task if necessary
+                    if( currentTask->getState() == TaskStateType::eRunning )
                     {
                         setTaskReady( currentTask );
                     }
+
                     ptrTaskData->setState( TaskStateType::eRunning );
                     currentTask = ptrTaskData;
 

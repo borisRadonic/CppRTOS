@@ -11,10 +11,11 @@ namespace CppRtos
         ptrKernel = ptrKernelFactory.getKernel();
     }
 
-    SemResult Semaphore::acquire(std::uint32_t ticksTimeout)
+    SemResult Semaphore::wait(std::uint32_t ticksTimeout)
     {
+        assert(ptrKernel != nullptr);
         assert( ptrKernel->isInsideInterrupt() == false );
-        if( !ptrKernel->isInsideInterrupt())
+        if( (ptrKernel != nullptr) && !ptrKernel->isInsideInterrupt())
         {
             bool waitForever = (ticksTimeout == WAIT_FOREVER);
             std::uint64_t end = ticksTimeout + ptrKernel->getTickCount();
@@ -42,7 +43,7 @@ namespace CppRtos
                             return SemResult::Timeout;
                         }
                     }
-                    TaskData* ptrTaskData = ptrKernel->getCurrentTask();                                        
+                    TaskData* ptrTaskData = ptrKernel->getCurrentTask();
                     ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
 
                     waitingQueue.enqueue(ptrTaskData);
@@ -59,24 +60,33 @@ namespace CppRtos
     }
 
     /*Semaphore can be released from interrupt and from any task*/
-    void Semaphore::release()
+    void Semaphore::signal()
     {
-        ptrKernel->enterCritical();
-        if (!waitingQueue.isEmpty())
+        assert(ptrKernel != nullptr);
+        if (ptrKernel != nullptr)
         {
-            TaskData* taskToUnblock = waitingQueue.dequeue();
-            ptrKernel->setTaskReady(taskToUnblock);
-        }
-        else if (count < maxCount)
-        {
-            ++count;
-        }
+            ptrKernel->enterCritical();
 
-        ptrKernel->exitCritical();
+            if (!waitingQueue.isEmpty())
+            {
+                TaskData* taskToUnblock = waitingQueue.dequeue();
+                ptrKernel->setTaskReady(taskToUnblock);
 
-        if (!ptrKernel->isInsideInterrupt())
-        {
-            ptrKernel->yield();
+            }
+            else if (count < maxCount)
+            {
+                ++count;
+            }
+
+            ptrKernel->exitCritical();
+
+            if (!ptrKernel->isInsideInterrupt())
+            {
+                //set self also as Ready to continue
+                TaskData* ptrCurrentTaskData = ptrKernel->getCurrentTask();
+                ptrKernel->setTaskReady(ptrCurrentTaskData);
+                ptrKernel->yield();
+            }
         }
     }
 

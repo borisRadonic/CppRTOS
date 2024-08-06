@@ -29,7 +29,7 @@ namespace CppRtos
         _data.setTaskInterfacePtr(static_cast<ITask*>(this));
     }
 
-    void Task::Task::sleep(std::uint32_t ticks)
+    void Task::sleep(std::uint32_t ticks)
     {
         KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
         Kernel* ptrKernel = ptrKernelFactory.getKernel();
@@ -44,4 +44,16 @@ namespace CppRtos
         // Yield to switch context
         ptrKernel->yield();
     }
+
+    void Task::yield()
+    {
+        KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
+        Kernel* ptrKernel = ptrKernelFactory.getKernel();
+        assert(ptrKernel->isInsideInterrupt() == false);
+        if (!ptrKernel->isInsideInterrupt())
+        {
+            ptrKernel->yield();
+        }
+    }
+
 }
