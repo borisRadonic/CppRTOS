@@ -230,9 +230,6 @@ public:
 	}
 };
 
-
-
-
 class Task3 : public CppRtos::Task
 {
 public:
@@ -248,7 +245,7 @@ public:
      int a = 0;
 		while(true)
 		{
-      auto result = semaphore1->acquire(13000);
+      auto result = semaphore1->wait(13000);
       if (result == CppRtos::SemResult::Success)
       {
         for ( int i = 0 ; i < 10000; i++ )

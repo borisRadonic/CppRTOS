@@ -3,11 +3,13 @@
 #include "Interface.hpp"
 #include <exception>
 #include <string>
+#include "Task.hpp"
 
 /*Only for Unit Tests*/
 
 namespace CppRtos
 {
+	class Kernel;
 
 	class UnitTestException : public std::exception
 	{
@@ -28,15 +30,24 @@ namespace CppRtos
 		{
 		public:
 
-			Port()
-				:_tickCount(0u)
-				, _sysTimerCount(0u)
+			explicit Port(Kernel* kernel)
+				:tickCount(0u)
+				,sysTimerCount(0u),
+				ptrKernel(kernel)
 			{
 			}
 
 			~Port()
 			{
 			}
+
+
+			CppRtos::TaskData* getCurrentTask();
+
+			void selectHighestPriorityTask();
+
+			void tick();
+
 
 			inline void unitTestSetisInsideInterrupt(bool value)
 			{
@@ -53,6 +64,15 @@ namespace CppRtos
 				//this is trick to come back in Test (used for Mutex, Semaphore and Queue tests)
 				throw UnitTestException("yield");
 			}
+
+			TaskData* getCurrentTask() const;
+
+			void setTaskReady(CppRtos::TaskData* ptrTask);
+
+			void setCurrentTask(TaskData* task);
+
+			void resetTaskReady(CppRtos::TaskData* ptrTask, TaskStateType newState);
+			
 
 			void disableInterrupts(void)  const override
 			{
@@ -73,22 +93,22 @@ namespace CppRtos
 
 			inline void incrementTickCount()
 			{
-				_tickCount++;
+				tickCount++;
 			}
 
 			inline void incrementSysTimerCount()
 			{
-				_sysTimerCount++;
+				sysTimerCount++;
 			}
 
 			inline std::uint64_t getTickCount() const
 			{
-				return _tickCount;
+				return tickCount;
 			}
 
 			inline std::uint64_t getSysTimerCount() const
 			{
-				return _sysTimerCount;
+				return sysTimerCount;
 			}
 
 			inline void memoryBarrier(void) const
@@ -124,11 +144,13 @@ namespace CppRtos
 		private:
 
 
-			std::uint64_t 	_tickCount = 0u;
+			std::uint64_t 	tickCount = 0u;
 
-			std::uint64_t 	_sysTimerCount = 0u;
+			std::uint64_t 	sysTimerCount = 0u;
 
-			bool insideInterrupt = false;;
+			bool insideInterrupt = false;
+
+			Kernel* ptrKernel = nullptr;
 
 
 

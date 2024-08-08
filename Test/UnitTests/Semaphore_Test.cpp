@@ -32,17 +32,15 @@ class SemaphoreTest : public ::testing::Test
 public:
     std::aligned_storage_t<sizeof(CppRtos::Kernel), 4> _prealoc_kernel_mem;
     Kernel* kernel;
-    Port::Port port;
     MockTask mockTask1;
     MockTask mockTask2;
-
     Semaphore* ptrSem1;
-
 
     void SetUp() override
     {       
         CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
         kernel = kernelFactory.create(&_prealoc_kernel_mem);
+
         ptrSem1 = new Semaphore(1, 0);
 
         mockTask1.setPriority(TaskPriority::PRIORITY_HIGH);
@@ -97,18 +95,19 @@ TEST_F(SemaphoreTest, TestSemaphore1)
 {
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
+    Port::Port& port = kernel->getPort();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); // task1 is running
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is running
     /*Task 1 signals semaphore1*/
     EXPECT_THROW(
     {
         ptrSem1->signal();
     }, CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); // task1 is still running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is still running
 
     //Task 1 gives CPU time to others (Task2)
 
@@ -117,8 +116,8 @@ TEST_F(SemaphoreTest, TestSemaphore1)
        mockTask1.yield();
     }, CppRtos::UnitTestException);
     
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2); // task2 is running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
 
 
     /*Task 2 waits on semaphore1*/
@@ -167,10 +166,12 @@ TEST_F(SemaphoreTest, TestSemaphore2)
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); // task1 is running
+    Port::Port& port = kernel->getPort();
+    
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is running
 
     //Task 1 gives CPU time to others (Task2)
 
@@ -179,8 +180,8 @@ TEST_F(SemaphoreTest, TestSemaphore2)
         mockTask1.yield();
     }, CppRtos::UnitTestException);
 
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2); // task2 is running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
 
     //Task 2 is currently running and attempts to acquire a semaphore.
     EXPECT_THROW(
@@ -189,16 +190,16 @@ TEST_F(SemaphoreTest, TestSemaphore2)
     }, CppRtos::UnitTestException);
     
     //Task 2 is blocked and moved to the waiting state.
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); //task 1 is running again
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); //task 1 is running again
 
     /*Task 1 signals semaphore1*/
     EXPECT_THROW(
     {
         ptrSem1->signal();
     }, CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); // task1 is still running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is still running
 
     //Task 1 gives CPU time to others (Task2)
 
@@ -207,6 +208,6 @@ TEST_F(SemaphoreTest, TestSemaphore2)
         mockTask1.yield();
     }, CppRtos::UnitTestException);
 
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2); // task2 is running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
 }

@@ -120,8 +120,8 @@ namespace CppRtos
         bool isAnyTaskBlocking(CppRtos::TaskPriority priority);
        
     private:
-        std::int32_t count = 0; /**< The count of the mutex */
-        TaskData* owner = nullptr; /**< Pointer to the task that currently owns the mutex */
-        Fifo<TaskData*, Settings::MAX_TASKS> _blockedTasks = {}; /**< Queue of tasks waiting on the mutex */
+        std::int32_t count = 0u;                                /**< The count of the mutex */
+        TaskData* owner = nullptr;                              /**< Pointer to the task that currently owns the mutex */
+        Fifo<TaskData*, Settings::MAX_TASKS> blockedTasks = {}; /**< Queue of tasks waiting on the mutex */
     };
 }

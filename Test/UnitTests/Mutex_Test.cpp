@@ -152,11 +152,13 @@ TEST_F(MutexTest, TestMutex1)
 {
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
+    
+    Port::Port& port = kernel->getPort();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
-    kernel->selectHighestPriorityTask(); // task1 is running
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
+    port.selectHighestPriorityTask(); // task1 is running
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
 
     /*Task 1 acquires mutex1*/
     EXPECT_EQ(mutex1.acquire(WAIT_FOREVER), MutexResult::Success);
@@ -165,8 +167,8 @@ TEST_F(MutexTest, TestMutex1)
     EXPECT_EQ(mutex1.acquire(WAIT_FOREVER), MutexResult::AlreadyOwned);
 
     //change current task to Task2
-    kernel->setCurrentTask(ptrTaskData2);
-    kernel->resetTaskReady(ptrTaskData2, TaskStateType::eRunning);
+    port.setCurrentTask(ptrTaskData2);
+    port.resetTaskReady(ptrTaskData2, TaskStateType::eRunning);
 
     EXPECT_THROW(
     {
@@ -174,20 +176,20 @@ TEST_F(MutexTest, TestMutex1)
     }, CppRtos::UnitTestException);
 
     //change current task to Task1
-    kernel->setCurrentTask(ptrTaskData1);
+    port.setCurrentTask(ptrTaskData1);
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eBlocked);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
 
-    kernel->selectHighestPriorityTask();
+    port.selectHighestPriorityTask();
 
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
 
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eBlocked);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
 
     /*free mutex from task1*/
     //change current task to Task1
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
 
 
     EXPECT_THROW(
@@ -195,8 +197,8 @@ TEST_F(MutexTest, TestMutex1)
             MutexResult res = mutex1.release();
         }, CppRtos::UnitTestException);
 
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eRunning);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
 }
@@ -232,43 +234,44 @@ TEST_F(MutexTest2, PriorityInversion)
     TaskData* ptrTaskDataMedium = mockTaskMedium.getTaskData();
     TaskData* ptrTaskDataHigh   = mockTaskHigh.getTaskData();
 
+    Port::Port& port = kernel->getPort();
+
     // Task 1 (Low Priority) acquires the mutex
-    kernel->setTaskReady(ptrTaskDataLow);
-    kernel->setTaskReady(ptrTaskDataMedium);
-    kernel->setTaskReady(ptrTaskDataHigh);
+    port.setTaskReady(ptrTaskDataLow);
+    port.setTaskReady(ptrTaskDataMedium);
+    port.setTaskReady(ptrTaskDataHigh);
 
     // Simulate Task 1 (Low Priority) running and acquiring the mutex
-    kernel->resetTaskReady(ptrTaskDataLow, TaskStateType::eRunning);
-    kernel->setCurrentTask(ptrTaskDataLow); // Simulates Task 1 is running
+    port.resetTaskReady(ptrTaskDataLow, TaskStateType::eRunning);
+    port.setCurrentTask(ptrTaskDataLow); // Simulates Task 1 is running
     EXPECT_EQ(mutex1.acquire(WAIT_FOREVER), MutexResult::Success);
 
     // Task 3 (High Priority) should now attempt to run
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskDataHigh);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskDataHigh);
 
     // Task 3 (High Priority) attempts to acquire the mutex but gets blocked
     EXPECT_THROW( mutex1.acquire(WAIT_FOREVER), CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
+    port.selectHighestPriorityTask();
     EXPECT_EQ(ptrTaskDataHigh->getState(), TaskStateType::eBlocked);
 
     // Task 2 (Medium Priority) should run next
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskDataMedium);
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskDataMedium);
     EXPECT_EQ(ptrTaskDataMedium->getState(), TaskStateType::eRunning);
        
     // Simulate Task 2 yielding
     EXPECT_THROW( mockTaskMedium.yield(), CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskDataLow);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskDataLow);
 
     // Task 1 (Low Priority) releases the mutex
     EXPECT_THROW( mutex1.release(), CppRtos::UnitTestException);
     
     // Task 3 (High Priority) should be unblocked and run now
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskDataHigh);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskDataHigh);
     EXPECT_EQ(ptrTaskDataHigh->getState(), TaskStateType::eRunning);
 }
-
 
 
 /*
@@ -296,48 +299,50 @@ TEST_F(MutexTest2, DeadlockScenario)
     TaskData* ptrTaskData2 = mockTaskMedium.getTaskData();
     TaskData* ptrTaskData3 = mockTaskHigh.getTaskData();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
-    kernel->setTaskReady(ptrTaskData3);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData3); //high priority task3 is running
+    Port::Port& port = kernel->getPort();
+
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
+    port.setTaskReady(ptrTaskData3);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData3); //high priority task3 is running
     
     EXPECT_THROW(mockTaskHigh.sleep(4); , CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2); //medium priority task2 is running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); //medium priority task2 is running
 
     EXPECT_THROW(mockTaskMedium.sleep(2);, CppRtos::UnitTestException);
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); //low  priority task1 is running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); //low  priority task1 is running
 
     // Task 1 acquires mutex1   
     EXPECT_EQ(mutex1.acquire(WAIT_FOREVER), MutexResult::Success);
 
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); //low  priority task1 is still running
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); //low  priority task1 is still running
 
-    kernel->incrementTickCount();
-    kernel->tick();
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1); //low  priority task1 is still running
+    port.incrementTickCount();
+    port.tick();
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); //low  priority task1 is still running
 
-    kernel->incrementTickCount();
-    kernel->tick();
-    kernel->selectHighestPriorityTask();
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2); //medium priority task2 is running
+    port.incrementTickCount();
+    port.tick();
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); //medium priority task2 is running
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eRunning);
 
     // Task 2 acquires mutex2
     EXPECT_EQ(mutex2.acquire(WAIT_FOREVER), MutexResult::Success);
           
     // Task 1 attempts to acquire mutex2 and gets blocked
-    kernel->setCurrentTask(ptrTaskData1);
+    port.setCurrentTask(ptrTaskData1);
     ptrTaskData1->setState(TaskStateType::eRunning);
     EXPECT_THROW(mutex2.acquire(WAIT_FOREVER), CppRtos::UnitTestException);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eBlocked);
 
     // Task 2 attempts to acquire mutex1 and should also get blocked or trigger deadlock handling
-    kernel->setCurrentTask(ptrTaskData2);
+    port.setCurrentTask(ptrTaskData2);
     ptrTaskData2->setState(TaskStateType::eRunning);
     EXPECT_THROW(mutex1.acquire(WAIT_FOREVER), CppRtos::UnitTestException);
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eBlocked);
@@ -371,6 +376,8 @@ TEST_F(MutexTest2, TaskSwitchingWhileHoldingMutex)
     TaskData* ptrTaskDataLow = mockTaskLow.getTaskData();
     TaskData* ptrTaskDataMedium = mockTaskMedium.getTaskData();
     TaskData* ptrTaskDataHigh = mockTaskHigh.getTaskData();
+
+    Port::Port& port = kernel->getPort();
 
     //// Task 3 (Low Priority) is ready and acquires the mutex
     //kernel->setTaskReady(ptrTaskDataLow);

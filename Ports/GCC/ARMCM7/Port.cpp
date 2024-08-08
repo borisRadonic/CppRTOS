@@ -3,6 +3,9 @@
 #include "KernelFactory.hpp"
 #include "Kernel.hpp"
 
+	static CppRtos::Port::Port* gPtrPort = nullptr;
+	static CppRtos::Kernel* gPtrKernel = nullptr;
+
 	struct CURRENT_TCB
 	{
 		void* currentStackPtr = nullptr;
@@ -24,28 +27,22 @@
 
 	extern "C" void enableVFP( void );
 
-	CppRtos::Kernel* pKernel = nullptr; 
-	
+
 	void taskSwitchContext() noexcept
 	{
 		/*call kernel function*/
-		if( pKernel == nullptr)
-		{
-			CppRtos::KernelFactory& kernelFact = CppRtos::KernelFactory::getInstance();
-			pKernel = kernelFact.getKernel();
-		}
-		if( pKernel != nullptr )
+		if( gPtrPort != nullptr )
 		{			
 			//store updated stack pointer
-			CppRtos::TaskData* ptrTaskData = pKernel->getCurrentTask();
+			CppRtos::TaskData* ptrTaskData = gPtrPort->getCurrentTask();
 			ptrTaskData->setCurrentStackPtr( ptrCurrentTask->currentStackPtr );
 
-			pKernel->selectHighestPriorityTask();
+			gPtrPort->selectHighestPriorityTask();
 
-			if( pKernel->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
+			if( gPtrPort->getCurrentTask()->getCurrentStackPtr() != ptrCurrentTask->currentStackPtr )
 			{
 				//get new stack pointer and store to ptrCurrentTask
-				ptrTaskData = pKernel->getCurrentTask();			
+				ptrTaskData = gPtrPort->getCurrentTask();
 				ptrCurrentTask->currentStackPtr = ptrTaskData->getCurrentStackPtr();
 			}
 		}
@@ -77,28 +74,43 @@ namespace CppRtos
 			setInterruptBasePriority(0u);
 		}
 
-		inline void Port::enterCritical(void)
+		[[nodiscard]] CppRtos::TaskData* Port::getCurrentTask()
 		{
-			_nestingCounter++;
+			return ptrKernel->getCurrentTask();
+		}
+
+		void Port::selectHighestPriorityTask()
+		{
+			ptrKernel->selectHighestPriorityTask();
+		}
+
+		void Port::tick()
+		{
+			ptrKernel->tick();
+		}
+
+		inline void Port::enterCritical()
+		{
+			nestingCounter++;
 			setInterruptPriorityAndGetOriginal(); //disable interrupts
 		}
 
-		inline void Port::exitCritical(void)
+		inline void Port::exitCritical()
 		{
-			if( _nestingCounter != 0 )
+			if( nestingCounter != 0 )
 			{
 				//assert( _nestingCounter != 0)
 				//while(true) {};
 			}
 			
-			_nestingCounter--;
-			if( _nestingCounter == 0u )
+			nestingCounter--;
+			if( nestingCounter == 0u )
 			{
 				enableInterrupts();
 			}
 		}
 
-		void Port::setupTimerInterrupt( void ) const
+		void Port::setupTimerInterrupt()
 		{
 			SYSTICK_CTRL_REG 			= 0U; // Stop SysTick.
 			SYSTICK_CURRENT_VALUE_REG 	= 0U; // Reset the current value of the SysTick counter to 0
@@ -107,23 +119,38 @@ namespace CppRtos
 			// Internal Clock, Enable SysTick Interrupt and Enable the SysTick counter
 		    SYSTICK_CTRL_REG = ( SYSTICK_CLKSOURCE_INTERNAL | SYSTICK_TICKINT | SYSTICK_ENABLE );
 		}
+
+		inline void setGlobalPointers()
+		{
+			if( gPtrKernel == nullptr)
+			{
+				CppRtos::KernelFactory& kernelFact = CppRtos::KernelFactory::getInstance();
+				gPtrKernel = kernelFact.getKernel();
+			}
+
+			if( gPtrPort == nullptr)
+			{
+				CppRtos::Port::Port& refPort = gPtrKernel->getPort();
+				gPtrPort = &refPort;
+			}
+		}
 		
 		extern "C" void SysTick_Handler( void )
 		{
 			uint32_t  pri = setInterruptPriorityAndGetOriginal();
-			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-			pKernel->incrementTickCount();
-			pKernel->tick();
+			setGlobalPointers();
+			gPtrPort->incrementTickCount();
+			gPtrPort->tick();
 			NVIC_ICSR = ICSR_PENDSVSET_BIT;
 			assert( pri != 10000 );
 			setInterruptBasePriority( 0 );
 		}
 
-		void Port::validateInterruptPriority(void) const
+		void Port::validateInterruptPriority() const
 		{
 		}
 
-		void Port::startScheduler(void)
+		void Port::startScheduler()
 		{
 		 	// Make PendSV and SysTick the lowest priority interrupts
 			NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 16)) | NVIC_PENDSV_PRI;
@@ -133,33 +160,33 @@ namespace CppRtos
 			NVIC_SHPR2 = 0u;
 
 		 	// Start the timer for the tick ISR.
-			this->setupTimerInterrupt();
+			Port::setupTimerInterrupt();
 
 			setPrivilegedMode();
 
 			 /* Lazy save FPU registers */
 			 PFPCCR |= ASPEN_AND_LSPEN_BITS;
 
-			this->startFirstTask();
+			CppRtos::Port::Port::startFirstTask();
 			/*It should never get here*/
 		}
 
-		void Port::endScheduler(void) const
+		void Port::endScheduler() const
 		{
 			//assert();
 		}
 
-		void Port::startFirstTask(void) const
+		void Port::startFirstTask()
 		{
 			CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-			ConvertVoidPtrUin32 convert;
+			ConvertVoidPtrUin32 convert = {};
 			convert.dataVoid = static_cast<void*> (pKernel->getCurrentTask());
 			currentTaskDataAddr = convert.uint32;
 			ptrCurrentTask->currentStackPtr = convert.dataVoid;
 			startInitialTask();
 		}
 
-		void Port::taskExitError(void)
+		void Port::taskExitError()
 		{
 			disableInterrupts();
 			while( true)
@@ -169,16 +196,19 @@ namespace CppRtos
 
 		extern "C" void callFirstTime(void)
 		{
-		 	CppRtos::Kernel* pKernel = CppRtos::KernelFactory::getInstance().getKernel();
-		 	TaskData* ptrTaskData = pKernel->getCurrentTask();
-			if( ptrTaskData != nullptr )
+			setGlobalPointers();
+			if( gPtrPort != nullptr)
 			{
-				ITask* ptrTaskInterface = ptrTaskData->getTaskInterfacePtr();
-				if( ptrTaskInterface != nullptr )
+				TaskData* ptrTaskData = gPtrPort->getCurrentTask();
+				if( ptrTaskData != nullptr )
 				{
-					return ptrTaskInterface->run();
+					ITask* ptrTaskInterface = ptrTaskData->getTaskInterfacePtr();
+					if( ptrTaskInterface != nullptr )
+					{
+						return ptrTaskInterface->run();
+					}
 				}
-			}			
+			}
 		}
 
 		/*
@@ -205,7 +235,7 @@ namespace CppRtos
 		{
 			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
 
-			 std::uint32_t* topOfStack = static_cast<std::uint32_t*>(pxTopOfStack);
+			 auto topOfStack = static_cast<std::uint32_t*>(pxTopOfStack);
 
 			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
 			 topOfStack--;
@@ -220,7 +250,7 @@ namespace CppRtos
 
 			 void (Port::*funcPtr)() = &Port::taskExitError;
 		     // Convert the member function pointer to uintptr_t
-			 FunctionPointerUnion funcUnion;
+			 FunctionPointerUnion funcUnion = {};
 			 funcUnion.taskExitError = funcPtr;
      		// Get the integer representation of the function pointer
 			uint32_t funcPtrInt32 = funcUnion.uintRepresentation;

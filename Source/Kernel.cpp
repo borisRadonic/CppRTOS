@@ -7,6 +7,7 @@ namespace CppRtos
     :  state( KernelState::eReset )
     , lastError( KernelError::eOK )			
     , taskCount (0u)
+    , port(this)
     {
         tasks.fill(nullptr);
         timers.fill(nullptr);
@@ -15,7 +16,40 @@ namespace CppRtos
         currentTask = idleTask.getTaskData();
     }
 
-    void Kernel::updateTimers()
+    void Kernel::addTask( Task& task  )
+    {
+        if( taskCount < Settings::MAX_TASKS )
+        {
+            TaskData* ptrTaskData = task.getTaskData();
+            ptrTaskData->setId( taskCount );
+            tasks[taskCount] = ptrTaskData;
+            taskCount++;
+
+            assert( taskCount <= Settings::MAX_TASKS );
+            //add task to the Ready List
+            port.enterCritical();
+
+            TaskPriority priority = ptrTaskData->getPriority();
+
+            if( priority > highestTaskPriority )
+            {
+                highestTaskPriority = priority;
+            }
+
+            StackAddr pStack = port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
+            ptrTaskData->setCurrentStackPtr( pStack );
+
+            auto prio = static_cast<std::size_t>(priority);
+            assert( prio < readyTasks.size() );
+            if( prio < readyTasks.size() )
+            {
+                readyTasks[prio] = readyTasks[prio] | (1u << ptrTaskData->getId());
+            }
+            port.exitCritical();
+        }
+    }
+
+    void Kernel::updateTimers() const
     {
         for (auto timer : timers)
         {

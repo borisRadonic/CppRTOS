@@ -4,6 +4,7 @@
 
 #include "EventGroup.h"
 #include "KernelFactory.hpp"
+#include "Kernel.hpp"
 
 namespace CppRtos
 {

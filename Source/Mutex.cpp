@@ -13,9 +13,9 @@ namespace CppRtos
     Mutex::~Mutex()
     {
         // Ensure no tasks are blocked when the mutex is destroyed
-        while (!_blockedTasks.isEmpty())
+        while (!blockedTasks.isEmpty())
         {
-            TaskData* ptrUnblockedTask = _blockedTasks.dequeue();
+            TaskData* ptrUnblockedTask = blockedTasks.dequeue();
             if (ptrUnblockedTask != nullptr)
             {
                 ptrUnblockedTask->setState(TaskStateType::eReady);
@@ -67,14 +67,14 @@ namespace CppRtos
                         owner->setPriority( ptrTaskData->getPriority() );
                     }
                         
-                    if (!_blockedTasks.isFull())
+                    if (!blockedTasks.isFull())
                     {                           
                         // The exchange failed, expected now holds the current value of _count
                         if (ptrTaskData->getState() == TaskStateType::eRunning)
                         {
                             ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
                         }
-                        _blockedTasks.enqueue(ptrTaskData);
+                        blockedTasks.enqueue(ptrTaskData);
                     }
 
                     ptrKernel->exitCritical();
@@ -110,9 +110,9 @@ namespace CppRtos
                 count--;
                 owner = nullptr;
 
-                if (!_blockedTasks.isEmpty())
+                if (!blockedTasks.isEmpty())
                 {
-                    TaskData* ptrUnblockedTask = _blockedTasks.dequeue();
+                    TaskData* ptrUnblockedTask = blockedTasks.dequeue();
                     ptrKernel->setTaskReady(ptrUnblockedTask);
 
                     // Restore the original priority if needed
@@ -135,9 +135,9 @@ namespace CppRtos
     bool Mutex::isAnyTaskBlocking(CppRtos::TaskPriority priority)
     {
         // Check if any tasks in the blocked queue have the given priority
-        for (size_t i = 0; i < _blockedTasks.getSize(); ++i)
+        for (size_t i = 0; i < blockedTasks.getSize(); ++i)
         {   
-            TaskData* ptrTask = _blockedTasks.getAt( i );  
+            TaskData* ptrTask = blockedTasks.getAt( i );  
             if (ptrTask->getPriority() == priority)
             {
                 return true;

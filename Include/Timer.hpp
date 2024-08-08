@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <functional>
-#include <utility>
 
 namespace CppRtos
 {
@@ -61,7 +60,7 @@ namespace CppRtos
          * 
          * @return true if the timer is running, false otherwise.
          */
-        bool isRunning() const;
+        [[nodiscard]] bool isRunning() const;
 
         /**
          * @brief Advances the timer by one tick.
@@ -76,7 +75,7 @@ namespace CppRtos
          * 
          * @return true if the timer is allocated, false otherwise.
          */
-        bool isAllocated() const;
+        [[nodiscard]] bool isAllocated() const;
 
         /**
          * @brief Allocates the timer.

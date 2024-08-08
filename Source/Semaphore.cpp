@@ -62,7 +62,6 @@ namespace CppRtos
     /*Semaphore can be released from interrupt and from any task*/
     void Semaphore::signal()
     {
-        assert(ptrKernel != nullptr);
         if (ptrKernel != nullptr)
         {
             ptrKernel->enterCritical();
@@ -91,19 +90,25 @@ namespace CppRtos
     }
 
     void Semaphore::flush()
-    {     
-        ptrKernel->enterCritical();
-        bool isAnyy(false);
-        while (!waitingQueue.isEmpty())
+    {
+        if (ptrKernel != nullptr)
         {
-            TaskData* taskToUnblock = waitingQueue.dequeue();
-            ptrKernel->setTaskReady(taskToUnblock);
-            isAnyy = true;
-        }
-        ptrKernel->exitCritical();
-        if( isAnyy && !ptrKernel->isInsideInterrupt() )
-        {
-            ptrKernel->yield();
+            ptrKernel->enterCritical();
+            bool isAnyy(false);
+            while (!waitingQueue.isEmpty())
+            {
+                TaskData* taskToUnblock = waitingQueue.dequeue();
+                ptrKernel->setTaskReady(taskToUnblock);
+                isAnyy = true;
+            }
+            ptrKernel->exitCritical();
+            if( isAnyy && !ptrKernel->isInsideInterrupt() )
+            {
+                //set self also as Ready to continue
+                TaskData* ptrCurrentTaskData = ptrKernel->getCurrentTask();
+                ptrKernel->setTaskReady(ptrCurrentTaskData);
+                ptrKernel->yield();
+            }
         }
     }
 }

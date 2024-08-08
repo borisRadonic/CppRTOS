@@ -66,12 +66,14 @@ TEST_F(KernelTest, SelectHighestPriorityTask_SelectsCorrectTask)
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
+    Port::Port& port = kernel->getPort();
 
-    kernel->selectHighestPriorityTask();
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
 
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    port.selectHighestPriorityTask();
+
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
 }
@@ -81,14 +83,16 @@ TEST_F(KernelTest, SelectHighestPriorityTask_PreemptsCurrentTask)
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
 
-    kernel->setTaskReady(ptrTaskData1);
-    kernel->setTaskReady(ptrTaskData2);
-    kernel->selectHighestPriorityTask(); // taskData1 is running
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData1);
+    Port::Port& port = kernel->getPort();
 
-    kernel->selectHighestPriorityTask();
+    port.setTaskReady(ptrTaskData1);
+    port.setTaskReady(ptrTaskData2);
+    port.selectHighestPriorityTask(); // taskData1 is running
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
 
-    EXPECT_EQ(kernel->getCurrentTask(), ptrTaskData2);
+    port.selectHighestPriorityTask();
+
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
     EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eRunning);
 }

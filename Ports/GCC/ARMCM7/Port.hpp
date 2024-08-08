@@ -1,11 +1,14 @@
 #pragma once
-#include <assert.h>
 #include "Interface.hpp"
+#include "Task.hpp"
 #include "ArmCM7.hpp"
 
 
 namespace CppRtos
 {
+
+	class Kernel;
+
 	namespace Port
 	{
 
@@ -132,6 +135,7 @@ namespace CppRtos
 		{
 		public:
 
+			friend CppRtos::Kernel;
 
 			union FunctionPointerUnion
 			{
@@ -139,19 +143,18 @@ namespace CppRtos
 			    std::uint32_t uintRepresentation;
 			};
 
-			Port()
-			 :_tickCount ( 0u )
-			 , _sysTimerCount( 0u )
+			explicit Port( CppRtos::Kernel* kernel)
+			 :tickCount ( 0u )
+			 , sysTimerCount( 0u )
+			,ptrKernel(kernel)
 			{
 			}
 
-			~Port()
-			{
-			}
+			~Port() override = default;
 
-			inline bool isInsideInterrupt( void ) const override
+			[[nodiscard]] inline bool isInsideInterrupt() const override
 			{
-				return _cpu.isIRQMode();
+				return cpu.isIRQMode();
 			}
 
 			inline void yield()
@@ -162,62 +165,71 @@ namespace CppRtos
 				exitCritical();
 			}
 
-			void disableInterrupts( void )  const override;
+			[[nodiscard]] CppRtos::TaskData* getCurrentTask();
+
+			void selectHighestPriorityTask();
+
+			void tick();
+
+
+			void disableInterrupts()  const override;
 			
-			void enableInterrupts( void ) const override;
+			void enableInterrupts() const override;
 			
-			void enterCritical(void)  override;
+			void enterCritical()  override;
 			
-			void exitCritical(void) override;
+			void exitCritical() override;
 			
 			inline void incrementTickCount()
 			{
-				_tickCount++;
+				tickCount++;
 			}
 
 			inline void incrementSysTimerCount()
 			{
-				_sysTimerCount++;
+				sysTimerCount++;
 			}
 
-			inline std::uint64_t getTickCount() const
+			[[nodiscard]] inline std::uint64_t getTickCount() const
 			{
-				return _tickCount;
+				return tickCount;
 			}
 
-			inline std::uint64_t getSysTimerCount() const
+			[[nodiscard]] inline std::uint64_t getSysTimerCount() const
 			{
-				return _sysTimerCount;
+				return sysTimerCount;
 			}
 		
-			inline void memoryBarrier( void ) const
+			inline void memoryBarrier() const override
 			{
 				__asm volatile ( "" ::: "memory" );
 			}
 			
-			void validateInterruptPriority(void) const override;
+			void validateInterruptPriority() const override;
 
-			void startScheduler(void) override;
+			void startScheduler() override;
 
-			void endScheduler(void) const override;
+			void endScheduler() const override;
 
-			void startFirstTask(void) const;
+			static void startFirstTask();
 
-			void taskExitError(void) override;
+			void taskExitError() override;
 
 			void* initialiseStack(void* pxTopOfStack, void* pvParameters) override;
 
 		private:
 
-			void setupTimerInterrupt( void ) const;
+			static void setupTimerInterrupt() ;
 
- 			std::uint64_t 	_tickCount = 0u;
+ 			std::uint64_t 	tickCount = 0u;
 
-        	std::uint64_t 	_sysTimerCount = 0u;
+        	std::uint64_t 	sysTimerCount = 0u;
 
-			std::uint32_t _nestingCounter = 0u;
+			std::uint32_t nestingCounter = 0u;
 
-			ARMCM7 _cpu;
+			ARMCM7 cpu;
+
+			Kernel* ptrKernel = nullptr;
 			
 		};
 	}

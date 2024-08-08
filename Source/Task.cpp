@@ -8,9 +8,9 @@ namespace CppRtos
     :ptrStack(stack)
     {			
         std::size_t start = reinterpret_cast<std::size_t>(stack);
-        _data.setStartStack(stack);
-        _data.setTopStack(reinterpret_cast<void*>(start + size));
-        _data.setTaskInterfacePtr(static_cast<ITask*>(this));
+        data.setStartStack(stack);
+        data.setTopStack(reinterpret_cast<void*>(start + size));
+        data.setTaskInterfacePtr(static_cast<ITask*>(this));
     }
 
     Task::Task():ptrStack(nullptr)
@@ -24,9 +24,9 @@ namespace CppRtos
     void Task::setStack( std::uint8_t* stack, std::size_t size )
     {
         std::size_t start = reinterpret_cast<std::size_t>(stack);
-        _data.setStartStack(stack);
-        _data.setTopStack(reinterpret_cast<void*>(start + size));
-        _data.setTaskInterfacePtr(static_cast<ITask*>(this));
+        data.setStartStack(stack);
+        data.setTopStack(reinterpret_cast<void*>(start + size));
+        data.setTaskInterfacePtr(static_cast<ITask*>(this));
     }
 
     void Task::sleep(std::uint32_t ticks)

@@ -7,11 +7,13 @@
 
 #include <cstdint>
 #include "Config.hpp"
-#include "Kernel.hpp"
 #include "Fifo.hpp"
+#include "Task.hpp"
 
 namespace CppRtos
 {
+    class Kernel;
+
     /**
      * @class EventGroup
      * @brief Manages a set of event flags for task synchronization in an RTOS.
@@ -50,7 +52,7 @@ namespace CppRtos
         * @param timeout The maximum time (in system ticks) to wait for the flags. Defaults to WAIT_FOREVER.
         * @return True if the flags were set within the timeout period, false if the timeout occurred.
         */
-        bool waitForEvents(std::uint32_t flagsToWaitFor, std::uint32_t timeout = WAIT_FOREVER);
+        bool waitForEvents(std::uint32_t flagsToWaitFor, std::uint32_t timeout);
 
        /**
        * @brief Sets a specific set of flags.
@@ -81,7 +83,7 @@ namespace CppRtos
         *
         * @return The current event flags as a 32-bit unsigned integer.
         */
-        std::uint32_t getEvents() const;
+        [[nodiscard]] std::uint32_t getEvents() const;
 
     private:
 
@@ -110,7 +112,7 @@ namespace CppRtos
         * in the RTOS. This allows the EventGroup to interact with the kernel, such as blocking and
         * unblocking tasks.
         */
-        Kernel* ptrKernel = nullptr; // Pointer to the kernel
+        Kernel* ptrKernel; // Pointer to the kernel
     };
 }
 

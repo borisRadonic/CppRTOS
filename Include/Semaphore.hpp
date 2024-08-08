@@ -110,13 +110,13 @@ namespace CppRtos
        
     private:
 
-       std::uint32_t maxCount; /**< The maximum count the semaphore can reach */
+        std::uint32_t maxCount;                                     /**< The maximum count the semaphore can reach */
 
-        std::uint32_t count; /**< The current count of the semaphore */
+        std::uint32_t count;                                        /**< The current count of the semaphore */
         
-        Fifo<TaskData*, Settings::MAX_TASKS> waitingQueue  = {}; /**< Queue of tasks waiting on the semaphore */
+        Fifo<TaskData*, Settings::MAX_TASKS> waitingQueue  = {};    /**< Queue of tasks waiting on the semaphore */
 
-        Kernel* ptrKernel = nullptr; /**< Pointer to the singleton kernel instance */
+        Kernel* ptrKernel = nullptr;                                /**< Pointer to the singleton kernel instance */
 
     };
 }
