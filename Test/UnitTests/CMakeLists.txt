@@ -56,6 +56,7 @@ set(UT_SOURCES
     ${PROJECT_SOURCE_DIR}/Scheduling_Test.cpp
     ${PROJECT_SOURCE_DIR}/Mutex_Test.cpp
     ${PROJECT_SOURCE_DIR}/Semaphore_Test.cpp
+    ${PROJECT_SOURCE_DIR}/MsgQueue_Test.cpp
     ${PROJECT_SOURCE_DIR}/Port.cpp
 )
 

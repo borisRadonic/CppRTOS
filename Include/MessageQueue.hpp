@@ -4,9 +4,8 @@
 #include <cstddef>
 #include <array>
 #include <algorithm>
-#include "KernelFactory.hpp"
-#include "Kernel.hpp"
-#include "Mutex.hpp"
+#include "InternalKernelAcessor.hpp"
+#include "SpinLock.hpp"
 #include "Config.hpp"
 
 namespace CppRtos
@@ -70,97 +69,109 @@ namespace CppRtos
 
     private:
         Fifo<T_MESSAGE, MAX_MESSAGES> queue; /**< Fifo for storing messages */
-        mutable Mutex mtx; /**< Mutex to protect access to the queue */
+        mutable Mutex mtx;
+        CppRtos::SpinLock spnLock;
     };
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
-    MessageQueue<T_MESSAGE, MAX_MESSAGES>::MessageQueue()
-    {       
-    }
+    MessageQueue<T_MESSAGE, MAX_MESSAGES>::MessageQueue() = default;
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
     MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::send(const T_MESSAGE& message, std::uint32_t timeout)
     {
-        KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
-        Kernel* ptrKernel = ptrKernelFactory.getKernel();
-
-        if (ptrKernel->isInsideInterrupt() && (timeout != 0u) )
+        internal::InternalKernelAcessor kernelAccessor;
+ 
+        /*Check if called from ISR*/
+        if (kernelAccessor.isInsideInterrupt())
         {
-            return MsgQueueResult::ErrorCalledFromISR;
-        }
-
-        if (mtx.acquire(timeout) != MutexResult::Success)
-        {
-            return MsgQueueResult::Timeout;
-        }
-
-        if (queue.isFull())
-        {
-            if (timeout == 0u)
+            if (queue.isFull())
             {
-               mtx.release(); 
-               return MsgQueueResult::ErrorQueueFull;
+                return MsgQueueResult::ErrorQueueFull;
             }
-            else if (timeout == WAIT_FOREVER)
+            // Disable interrupts
+            kernelAccessor.enterCritical();
+            // Queue the message
+            spnLock.lock();
+            queue.enqueue(message);
+            spnLock.unlock();
+            kernelAccessor.exitCritical();
+            return MsgQueueResult::Success;
+        }
+        else
+        {
+            if (queue.isFull())
             {
-                // Wait indefinitely until space is available
-                while (queue.isFull())
+                if (timeout == 0u)
                 {
-                    mtx.release();
-                    ptrKernel->yield();
+                    return MsgQueueResult::ErrorQueueFull;
+                }
+                else if (timeout == WAIT_FOREVER)
+                {
                     if (mtx.acquire(timeout) != MutexResult::Success)
                     {
                         return MsgQueueResult::Timeout;
                     }
-                }
-            }
-            else
-            {
-                // Wait for the specified timeout
-                std::uint64_t end = ptrKernel->getTickCount() + timeout;
-                while (queue.isFull())
-                {
-                    if (ptrKernel->getTickCount() > end)
+
+                    // Wait indefinitely until space is available
+                    while (queue.isFull())
                     {
                         mtx.release();
-                        return MsgQueueResult::Timeout;
+                        kernelAccessor.yield();
+                        if (mtx.acquire(timeout) != MutexResult::Success)
+                        {
+                            return MsgQueueResult::Timeout;
+                        }
                     }
-                    mtx.release();
-                    ptrKernel->yield();
+                }
+                else
+                {
                     if (mtx.acquire(timeout) != MutexResult::Success)
                     {
                         return MsgQueueResult::Timeout;
                     }
+                    // Wait for the specified timeout
+                    std::uint64_t end = kernelAccessor.getTickCount() + timeout;
+                    while (queue.isFull())
+                    {
+                        mtx.release();
+                        if (kernelAccessor.getTickCount() > end)
+                        {                            
+                            return MsgQueueResult::Timeout;
+                        }
+                        kernelAccessor.yield();
+                        if (mtx.acquire(timeout) != MutexResult::Success)
+                        {
+                            return MsgQueueResult::Timeout;
+                        }
+                    }
                 }
             }
         }
+        kernelAccessor.enterCritical();
         // Queue the message
+        spnLock.lock();
         queue.enqueue(message);
-        mtx.release();
+        spnLock.unlock();
+        kernelAccessor.exitCritical();
+        
         return MsgQueueResult::Success;
     }
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
     MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::receive(T_MESSAGE& message, std::uint32_t timeout)
     {
-        KernelFactory& ptrKernelFactory = KernelFactory::getInstance();
-        Kernel* ptrKernel = ptrKernelFactory.getKernel();
+        internal::InternalKernelAcessor kernelAccessor;
 
-        if (ptrKernel->isInsideInterrupt())
+        if (kernelAccessor.isInsideInterrupt())
         {
             return MsgQueueResult::ErrorCalledFromISR;
         }
 
-        if (mtx.acquire(timeout) != MutexResult::Success)
-        {
-            return MsgQueueResult::Timeout;
-        }
        
         if (queue.isEmpty())
         {
             if (timeout == 0u)
             {
-                mtx.release();
                 return MsgQueueResult::ErrorQueueEmpty;
             }
             else if (timeout == WAIT_FOREVER)
@@ -168,51 +179,38 @@ namespace CppRtos
                 // Wait indefinitely until a message is available
                 while (queue.isEmpty())
                 {
-                    mtx.release();
-                    ptrKernel->yield();
-
-                    /*todo:test*/
-                    if(mtx.acquire(timeout) != MutexResult::Success)
-                    {
-                        return MsgQueueResult::Timeout;
-                    }
+                    kernelAccessor.yield();
                 }
             }
             else
             {
                 // Wait for the specified timeout
-                std::uint64_t end = ptrKernel->getTickCount() + timeout;
+                std::uint64_t end = kernelAccessor.getTickCount() + timeout;
                 while (queue.isEmpty())
                 {
-                    if (ptrKernel->getTickCount() > end)
-                    {
-                         mtx.release();
-                        return MsgQueueResult::Timeout;
-                    }
-                    mtx.release();
-                    ptrKernel->yield();
-                    if (mtx.acquire(timeout) != MutexResult::Success)
+                    if (kernelAccessor.getTickCount() > end)
                     {
                         return MsgQueueResult::Timeout;
                     }
-                }                
+                    kernelAccessor.yield();
+                }
             }
         }
-         // Dequeue the message
+        kernelAccessor.enterCritical();
+        spnLock.lock();
         message = queue.dequeue();
-        mtx.release();
-        return MsgQueueResult::Success;   
+        spnLock.unlock();
+        kernelAccessor.exitCritical();
+        return MsgQueueResult::Success;
     }
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
     std::size_t MessageQueue<T_MESSAGE, MAX_MESSAGES>::getNumMsg() const
-    {        
-        if (mtx.acquire(WAIT_FOREVER) != MutexResult::Success)
-        {
-            return 0u;
-        }
+    {
+        internal::InternalKernelAcessor kernelAccessor;
+        kernelAccessor.enterCritical();
         std::size_t numMsg = queue.getSize();
-        mtx.release();
+        kernelAccessor.exitCritical();
         return numMsg;
     }
 }

@@ -11,13 +11,6 @@ using ::testing::Return;
 using ::testing::_;
 
 
-struct TestMsg
-{
-    int id;
-    char text[99];
-    /* data */
-};
-
 class MockTask : public Task
 {
 public:

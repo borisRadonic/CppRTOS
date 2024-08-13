@@ -158,6 +158,18 @@ static std::aligned_storage_t<2048,4> _stack_task3;
 
 CppRtos::Semaphore* semaphore1;
 
+
+struct TestMsg
+{
+	int id;
+	char text[99];
+	/* data */
+};
+
+
+CppRtos::MessageQueue<TestMsg, 30> msgQueue1;
+
+
 class Task1 : public CppRtos::Task
 {
 public:
@@ -167,7 +179,8 @@ public:
 
 	}
 
-  CppRtos::Mutex* mutex;
+    CppRtos::Mutex* mutex;
+    CppRtos::MessageQueue<TestMsg, 30> *ptrMsgQueue;
 
 	void run() override
 	{
@@ -203,7 +216,9 @@ public:
 
 	}
 
-  CppRtos::Mutex* mutex;
+	CppRtos::MessageQueue<TestMsg, 30> *ptrMsgQueue;
+
+    CppRtos::Mutex* mutex;
   
 	void run() override
 	{
@@ -220,6 +235,10 @@ public:
         a = 0;
         mutex->release();
         this->sleep(5000);
+      	TestMsg msg{};
+      	msg.id = 1;
+
+      	ptrMsgQueue->send(msg,1000);
         semaphore1->flush();
       }
       else
@@ -274,16 +293,6 @@ static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer1;
 static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer2;
 static std::aligned_storage_t<sizeof(CppRtos::Semaphore),4> _prealoc_semaphore1;
-
-struct TestMsg
-{
-  int id;
-  char text[99];
-  /* data */
-};
-
-
-CppRtos::MessageQueue<TestMsg, 30> msgQueue1;
 
 
 void Error_Handler(void)
@@ -386,7 +395,9 @@ int main(void)
     
 
     task1->mutex = mutex;
+	task1->ptrMsgQueue = &msgQueue1;
     task2->mutex = mutex;
+	task2->ptrMsgQueue = &msgQueue1;
 
 
     std::string_view taskName1 = "Task 1";

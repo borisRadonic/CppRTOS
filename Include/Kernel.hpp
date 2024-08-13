@@ -8,6 +8,8 @@
 #include "Task.hpp"
 #include "Timer.hpp"
 #include "EventGroup.h"
+#include "InternalKernelAcessor.hpp"
+#include "SpinLock.hpp"
 #include "IdleTask.hpp"
 #include "Fifo.hpp"
 
@@ -148,6 +150,8 @@ namespace CppRtos
 		}
 
     	friend class EventGroup;
+    	friend class internal::InternalKernelAcessor;
+    	friend class SpinLock;
     	friend class Mutex;
     	friend class KernelFactory;
     	friend class Task;

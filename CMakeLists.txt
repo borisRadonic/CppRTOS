@@ -74,6 +74,9 @@ if(${HW_PLATFORM} STREQUAL ${PLATFORM_STM32H7})
         ${CMAKE_SOURCE_DIR}/Source/Timer.cpp
             Source/EventGroup.cpp
             Include/EventGroup.h
+            Include/SpinLock.hpp
+            Include/InternalKernelAcessor.hpp
+            Source/InternalKernelAcessor.cpp
     )
 elseif(${HW_PLATFORM} STREQUAL ${PLATFORM_ZYNQ})
     # Add ZYNQ specific sources here
