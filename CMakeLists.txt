@@ -77,6 +77,10 @@ if(${HW_PLATFORM} STREQUAL ${PLATFORM_STM32H7})
             Include/SpinLock.hpp
             Include/InternalKernelAcessor.hpp
             Source/InternalKernelAcessor.cpp
+            Source/Counter.cpp
+            Include/Counter.hpp
+            Source/Alarm.cpp
+            Include/Alarm.hpp
     )
 elseif(${HW_PLATFORM} STREQUAL ${PLATFORM_ZYNQ})
     # Add ZYNQ specific sources here

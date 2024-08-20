@@ -34,11 +34,31 @@ namespace CppRtos
 
         /**
         * @brief Constructs an EventGroup with all flags cleared.
-         *
-         * Initializes the EventGroup, setting all event flags to zero and preparing the
-         * internal structures for managing tasks waiting on these flags.
-         */
+        *
+        * Initializes the EventGroup, setting all event flags to zero and preparing the
+        * internal structures for managing tasks waiting on these flags.
+        */
         EventGroup();
+
+        /**
+        * @brief Deleted copy constructor to prevent copying of EventGroup objects.
+        */
+        EventGroup(const EventGroup&) = delete;
+
+        /**
+        * @brief Deleted copy assignment operator to prevent copying of EventGroup objects.
+        */
+        EventGroup& operator=(const EventGroup&) = delete;
+
+        /**
+         * @brief Deleted move constructor to prevent moving of EventGroup objects.
+         */
+        EventGroup(EventGroup&&) = delete;
+
+        /**
+         * @brief Deleted move assignment operator to prevent moving of EventGroup objects.
+         */
+        EventGroup& operator=(EventGroup&&) = delete;
 
         /**
         * @brief Waits for a specific set of flags to be set.

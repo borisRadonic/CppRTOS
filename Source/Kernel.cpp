@@ -60,13 +60,35 @@ namespace CppRtos
         }
     }
 
+    void Kernel::incrementCounters() const
+    {
+        for (auto& c : counters)
+        {
+            if( c != nullptr )
+            {
+                c->Increment();
+            }
+        }
+    }
+
+    void Kernel::CheckAlarms() const
+    {
+        for (auto& a : alarms)
+        {
+            if( a != nullptr )
+            {
+                a->CheckAndTrigger();
+            }
+        }
+    }
+
     //this function is called only after entering critical section
     void Kernel::setTaskReady( CppRtos::TaskData * ptrTask )
     {
         if( ptrTask != nullptr )
         {
             ptrTask->setState( TaskStateType::eReady );
-            std::size_t prio = static_cast<std::size_t>(ptrTask->getPriority());
+            auto prio = static_cast<std::size_t>(ptrTask->getPriority());
             assert( prio < readyTasks.size() );
             if( prio < readyTasks.size() )
             {
@@ -83,7 +105,7 @@ namespace CppRtos
             // Only reset if the task is currently in the ready state
             if (ptrTask->getState() == TaskStateType::eReady)
             {
-                std::size_t prio = static_cast<std::size_t>(ptrTask->getPriority());
+                auto prio = static_cast<std::size_t>(ptrTask->getPriority());
                 assert(prio < readyTasks.size());
                 if (prio < readyTasks.size())
                 {
@@ -125,6 +147,67 @@ namespace CppRtos
         }
     }
 
+    bool Kernel::addCounter(Counter* counter)
+    {
+        if( counter != nullptr )
+        {
+            for (auto& c : counters)
+            {
+                if (c == nullptr)
+                {
+                    c = counter;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void Kernel::removeCounter(Counter* counter)
+    {
+        if( counter != nullptr )
+        {
+            for (auto& c : counters)
+            {
+                if (c == counter)
+                {
+                    c = nullptr;
+                    return;
+                }
+            }
+        }
+    }
+
+    bool Kernel::addAlarm(Alarm* alarm)
+    {
+        if( alarm != nullptr )
+        {
+            for (auto& a : alarms)
+            {
+                if (a == nullptr)
+                {
+                    a = alarm;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    void Kernel::removeAlarm(Alarm* alarm)
+    {
+        if( alarm != nullptr )
+        {
+            for (auto& a : alarms)
+            {
+                if (a == alarm)
+                {
+                    a = nullptr;
+                    return;
+                }
+            }
+        }
+    }
 
     void Kernel::start()
     {
@@ -149,7 +232,7 @@ namespace CppRtos
     {
         port.enterCritical();
         //take next ready task with highest priority
-        std::uint8_t startPrio = static_cast<std::uint8_t>(highestTaskPriority);
+        auto startPrio = static_cast<std::uint8_t>(highestTaskPriority);
         for (std::uint8_t countPrio = startPrio; countPrio < static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE); countPrio++ )
         {
             std::uint32_t taskBitList = readyTasks[countPrio];
@@ -200,5 +283,7 @@ namespace CppRtos
             }
         }
         updateTimers();
+        incrementCounters();
+        CheckAlarms();
     }
 }

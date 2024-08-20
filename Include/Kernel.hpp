@@ -7,6 +7,8 @@
 #include "Config.hpp"
 #include "Task.hpp"
 #include "Timer.hpp"
+#include "Counter.hpp"
+#include "Alarm.hpp"
 #include "EventGroup.h"
 #include "InternalKernelAcessor.hpp"
 #include "SpinLock.hpp"
@@ -104,6 +106,44 @@ namespace CppRtos
     	void removeTimer(Timer* timer);
 
     	/**
+		 * @brief Adds a counter to the Kernel.
+		 *
+		 * Registers a counter with the Kernel.
+		 *
+		 * @param counter Pointer to Counter object to be added.
+		 * @return true if the counter was successfully added, false otherwise.
+		 */
+    	bool addCounter(Counter* counter);
+
+    	/**
+		 * @brief Removes a counter from the Kernel.
+		 *
+		 * This function removes a previously added counter from the Kernel.
+		 *
+		 * @param counter Pointer to the Counter object to be removed.
+		 */
+    	void removeCounter(Counter* counter);
+
+    	/**
+		 * @brief Adds an alarm to the Kernel.
+		 *
+		 * Registers an alarm with the Kernel.
+		 *
+		 * @param alarm Pointer to Alarm object to be added.
+		 * @return true if the counter was successfully added, false otherwise.
+		 */
+    	bool addAlarm(Alarm* alarm);
+
+    	/**
+		 * @brief Removes an alarm from the Kernel.
+		 *
+		 * This function removes a previously added alarm from the Kernel.
+		 *
+		 * @param alarm Pointer to the Alarm object to be removed.
+		 */
+    	void removeAlarm(Alarm* alarm);
+
+    	/**
 		 * @brief Retrieves the underlying port interface.
 		 *
 		 * Provides access to the Port instance used by the Kernel for low-level operations.
@@ -156,6 +196,8 @@ namespace CppRtos
     	friend class KernelFactory;
     	friend class Task;
     	friend class Semaphore;
+    	friend class Alarm;
+    	friend class Counter;
     	friend class Port::Port;
 
     private:
@@ -178,6 +220,16 @@ namespace CppRtos
 		 * This function checks and updates all timers, managing their expiration and execution.
 		 */
     	void updateTimers() const;
+
+    	/**
+		* @brief Increment all counters
+		*/
+    	void incrementCounters() const;
+
+    	/**
+		* @brief Check all alarms (called periodically)
+		*/
+    	void CheckAlarms() const;
 
     	/**
 		 * @brief Retrieves the currently running task.
@@ -369,5 +421,10 @@ namespace CppRtos
     	std::array<std::uint64_t, Settings::MAX_TASKS> taskWakeUpTimes = {0u};	/**< Array of wake-up times for sleeping tasks. */
 
     	std::array<Timer*, Settings::MAX_TIMERS> timers = {nullptr};			/**< Array of timers managed by the Kernel. */
+
+    	std::array<Counter*, Settings::MAX_COUNTERS> counters = {nullptr};
+
+    	std::array<Alarm*, Settings::MAX_ALARMS> alarms = {nullptr};
+
     };
 }

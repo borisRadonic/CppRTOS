@@ -12,6 +12,7 @@ namespace CppRtos
 {
      /**
      * @brief Enumeration representing the result of semaphore operations.
+     * A semaphore is used to control access to a common resource by multiple tasks in a concurrent system.
      */
     enum class SemResult : std::uint8_t
     {
@@ -65,7 +66,7 @@ namespace CppRtos
     class Semaphore
     {
     public:
-        
+
         /**
          * @brief Constructs a Semaphore with a maximum count and an initial count.
          * 
@@ -73,8 +74,35 @@ namespace CppRtos
          * @param initialCount The initial count of the semaphore.
          */
         explicit Semaphore(std::uint32_t maxCount, std::uint32_t initialCount );
-       
-      /**
+
+        /**
+        * @brief Deleted copy constructor to prevent copying of Semaphore objects.
+        */
+        Semaphore(const Semaphore&) = delete;
+
+        /**
+        * @brief Deleted copy assignment operator to prevent copying of Semaphore objects.
+        */
+        Semaphore& operator=(const Semaphore&) = delete;
+
+        /**
+        * @brief Deleted move constructor to prevent moving of Semaphore objects.
+        */
+        Semaphore(Semaphore&&) = delete;
+
+        /**
+        * @brief Deleted move assignment operator to prevent moving of Semaphore objects.
+        */
+        Semaphore& operator=(Semaphore&&) = delete;
+
+        /**
+        * @brief Destructor for the Semaphore class.
+        *
+        * Ensures that any tasks waiting on the semaphore are properly handled during destruction.
+        */
+        ~Semaphore() = default;
+
+        /**
          * @brief Attempts to acquire the semaphore, potentially blocking the task.
          * 
          * If the semaphore is not available, the task will be blocked until the semaphore
