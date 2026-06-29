@@ -25,7 +25,6 @@ Unlike traditional C-based RTOS implementations, CppRTOS provides a clean, type-
 - Mutexes
 - Event Flags
 - Idle Task
-- Tick-based scheduler
 - Portable hardware abstraction layer
 - Zero dynamic memory required
 - Optimized for ARM Cortex-M
