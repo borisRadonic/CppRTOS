@@ -150,6 +150,53 @@ rather than implementing every possible RTOS feature.
 
 ---
 
+
+## Example
+
+Creating a task is straightforward by deriving from `CppRtos::Task`.
+
+```cpp
+class WorkerTask : public CppRtos::Task
+{
+public:
+
+    WorkerTask(void* stack, size_t stackSize)
+        : Task(stack, stackSize)
+    {
+        setName("Worker");
+        setPriority(TaskPriority::PRIORITY_NORMAL);
+    }
+
+private:
+
+    void run() override
+    {
+        while (true)
+        {
+            // Application code
+
+            sleep(100);
+        }
+    }
+};
+
+alignas(8) static uint8_t workerStack[2048];
+
+WorkerTask worker(workerStack, sizeof(workerStack));
+
+int main()
+{
+    auto& kernelFactory = CppRtos::KernelFactory::getInstance();
+
+    CppRtos::Kernel* kernel =
+        kernelFactory.create(kernelMemory);
+
+    kernel->addTask(worker);
+
+    kernel->start();
+}
+```
+
 # Building
 
 Support for CMake will be added in a future release.
