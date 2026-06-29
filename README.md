@@ -1,7 +1,6 @@
-````markdown
 # CppRTOS
 
-> **Modern Real-Time Operating System written in C++ for ARM Cortex-M microcontrollers**
+**Modern Real-Time Operating System written in C++ for ARM Cortex-M microcontrollers**
 
 CppRTOS is a lightweight, preemptive real-time operating system written entirely in modern C++ for ARM Cortex-M microcontrollers.
 
@@ -9,7 +8,7 @@ The project demonstrates that object-oriented C++ can be used to build determini
 
 Unlike traditional C-based RTOS implementations, CppRTOS provides a clean, type-safe API while maintaining low runtime overhead and deterministic execution.
 
-> **Project Status:** Preview Release (Core functionality implemented, API is still evolving.)
+**Project Status:** Preview Release (Core functionality implemented, API is still evolving.)
 
 ---
 
@@ -114,11 +113,7 @@ CppRTOS demonstrates that modern C++ can be used for hard real-time embedded app
 
 Current architecture:
 
-* ARM Cortex-M0+
-* ARM Cortex-M3
-* ARM Cortex-M4
 * ARM Cortex-M7
-
 
 
 Additional Cortex-M devices can be supported by implementing a platform-specific port.
