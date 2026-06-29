@@ -20,14 +20,16 @@ Unlike traditional C-based RTOS implementations, CppRTOS provides a clean, type-
 - Static object allocation
 - Task abstraction using C++ classes
 - Message Queues
-- Binary Semaphores
-- Counting Semaphores
+- Semaphores
+- Alarms
 - Mutexes
+- Counters
 - Event Flags
 - Idle Task
 - Portable hardware abstraction layer
 - Zero dynamic memory required
 - Optimized for ARM Cortex-M
+
 
 ---
 
@@ -102,8 +104,7 @@ CppRTOS demonstrates that modern C++ can be used for hard real-time embedded app
 | Mutex              | ✅              |
 | Event Flags        | ✅              |
 | Idle Task          | ✅              |
-| Software Timers    | 🚧 In Progress |
-| Tickless Mode      | Planned        |
+| Software Timers    | ✅             |
 | SMP Support        | Not Planned    |
 
 ---
@@ -221,7 +222,7 @@ Areas of expertise:
 
 * Embedded Systems
 * Real-Time Software
-* ARM Cortex-M
+* HW Design/ Power Electronic
 * Motor Control
 * Functional Safety
 * Modern C++
