@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 #include <cstdint>
+=======
+>>>>>>> d600e6b85ae67ba2e38a9177d457913ab703c81a
 #include <cassert>
 #include "Port.hpp"
 #include "Config.hpp"
