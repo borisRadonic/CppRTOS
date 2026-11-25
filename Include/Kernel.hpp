@@ -258,7 +258,12 @@ namespace CppRtos
     	/**
 		* @brief Selects the task with the highest priority for execution.
 		*
-		* This function selects the highest-priority task that is ready to run.
+		* The currently running task (if still in the running state) is put back into its
+		* ready list, then the highest-priority ready task is selected. Tasks of equal
+		* priority are scheduled round-robin. The idle task is selected when nothing else is ready.
+		*
+		* @note Must be called with kernel interrupts masked (PendSV context or inside a
+		*       critical section). The function does not enter a critical section itself.
 		*/
     	void selectHighestPriorityTask();
 
@@ -408,7 +413,7 @@ namespace CppRtos
 
     	TaskData* currentTask = nullptr;										/**< Pointer to the currently executing task. */
 
-    	TaskPriority highestTaskPriority = TaskPriority::PRIORITY_IDLE;			/**< Highest priority of the tasks ready to run. */
+    	std::array<std::uint8_t, MAX_PRIORY_LEVELS> lastScheduledId = {};		/**< Per priority level: id of the task scheduled last (round-robin cursor). */
 
     	std::uint8_t taskCount = 0u;											/**< The current number of tasks added to the Kernel. */
 

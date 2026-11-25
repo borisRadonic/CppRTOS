@@ -2,6 +2,7 @@
 #include "Interface.hpp"
 #include "Task.hpp"
 #include "ArmCM7.hpp"
+#include "PortConfig.h"
 
 
 namespace CppRtos
@@ -41,7 +42,6 @@ namespace CppRtos
 
 		constexpr std::uint32_t  FIRST_USER_INTERRUPT_NUMBER  = 16u;
 
-		#define MAX_SYSCALL_INTERRUPT_PRIORITY 5u
 
 		/*Interrupt Controll and State Register (ICSR)*/
 		#define NVIC_ICSR     (*(volatile uint32_t *) 0xE000ED04)
@@ -111,11 +111,11 @@ namespace CppRtos
 		#define SHPR_PRIO_LSHIFT_PENDSV_BITS  16u
 		#define SHPR_PRIO_LSHIFT_SYSTICK_BITS 24u
 
-		#define PRIO_BITS 4u
+		#define PRIO_BITS PORT_NVIC_PRIO_BITS
 		constexpr std::uint8_t LOWEST_INT_PRIORITY = 15u;
 
 		//Highest interrupt priority that can be used by any ISR
-		constexpr std::uint8_t MAX_SYSCALL_INT_PRIORIRY = 5u;
+		constexpr std::uint8_t MAX_SYSCALL_INT_PRIORIRY = PORT_MAX_SYSCALL_INTERRUPT_PRIORITY;
 
 		#define MIN_INTERRUPT_PRIORITY            ( 255UL )
 

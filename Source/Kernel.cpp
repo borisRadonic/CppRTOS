@@ -3,6 +3,28 @@
 
 namespace CppRtos
 {
+    namespace
+    {
+        /**
+         * @brief Returns the index of the lowest set bit. The value must not be zero.
+         */
+        inline std::uint32_t lowestSetBit(std::uint32_t value)
+        {
+            assert(value != 0u);
+#if defined(__GNUC__) || defined(__clang__)
+            return static_cast<std::uint32_t>(__builtin_ctz(value));
+#else
+            std::uint32_t index = 0u;
+            while ((value & 1u) == 0u)
+            {
+                value >>= 1u;
+                index++;
+            }
+            return index;
+#endif
+        }
+    }
+
     Kernel::Kernel()
     :  state( KernelState::eReset )
     , lastError( KernelError::eOK )			
@@ -11,6 +33,8 @@ namespace CppRtos
     {
         tasks.fill(nullptr);
         timers.fill(nullptr);
+        // Start each round-robin cursor at the last id, so the first selection at a level picks the lowest id.
+        lastScheduledId.fill(static_cast<std::uint8_t>(Settings::MAX_TASKS - 1u));
 
         this->addTask( idleTask );
         currentTask = idleTask.getTaskData();
@@ -29,22 +53,11 @@ namespace CppRtos
             //add task to the Ready List
             port.enterCritical();
 
-            TaskPriority priority = ptrTaskData->getPriority();
-
-            if( priority > highestTaskPriority )
-            {
-                highestTaskPriority = priority;
-            }
-
             StackAddr pStack = port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
             ptrTaskData->setCurrentStackPtr( pStack );
 
-            auto prio = static_cast<std::size_t>(priority);
-            assert( prio < readyTasks.size() );
-            if( prio < readyTasks.size() )
-            {
-                readyTasks[prio] = readyTasks[prio] | (1u << ptrTaskData->getId());
-            }
+            // Insert into the ready list and mark the priority level as non-empty
+            setTaskReady( ptrTaskData );
             port.exitCritical();
         }
     }
@@ -215,6 +228,11 @@ namespace CppRtos
         assert( state == KernelState::eReady );
         if( state == KernelState::eReady)
         {
+            // Select the first task to run, so the scheduler starts with the highest-priority ready task.
+            port.enterCritical();
+            selectHighestPriorityTask();
+            port.exitCritical();
+
             port.startScheduler();
         }
     }
@@ -228,45 +246,53 @@ namespace CppRtos
 
     }
 
-    void Kernel::selectHighestPriorityTask() 
+    void Kernel::selectHighestPriorityTask()
     {
-        port.enterCritical();
-        //take next ready task with highest priority
-        auto startPrio = static_cast<std::uint8_t>(highestTaskPriority);
-        for (std::uint8_t countPrio = startPrio; countPrio < static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE); countPrio++ )
+        // The running task is not kept in the ready lists. Put it back if it was preempted
+        // (still running), so it competes with the other ready tasks. Blocked or sleeping
+        // tasks have already left the running state and are not re-inserted.
+        if( (currentTask != nullptr) && (currentTask->getState() == TaskStateType::eRunning) )
         {
-            std::uint32_t taskBitList = readyTasks[countPrio];
-            std::uint8_t countTask = 0u;
-            while (taskBitList != 0u)
-            {
-                if(  taskBitList & 1u )
-                {
-                    TaskData* ptrTaskData = tasks[countTask];
-                    // Preempt the current running task if necessary
-                    if( currentTask->getState() == TaskStateType::eRunning )
-                    {
-                        setTaskReady( currentTask );
-                    }
-
-                    ptrTaskData->setState( TaskStateType::eRunning );
-                    currentTask = ptrTaskData;
-
-                    // Clear the bit for this task in readyTasks
-                    readyTasks[countPrio] &= ~(1u << countTask);
-
-                    if( readyTasks[countPrio] == 0u )
-                    {
-                        priorityBitmap &= ~(1u << countPrio);
-
-                    }
-                    port.exitCritical();
-                    return;						
-                }
-                taskBitList >>= 1u;
-                countTask++;
-            }						
+            setTaskReady( currentTask );
         }
-        port.exitCritical();
+
+        if( priorityBitmap == 0u )
+        {
+            // Nothing is ready. Cannot happen while the idle task exists; keep the current task.
+            return;
+        }
+
+        // Lower numeric value means higher priority, so the lowest set bit is the highest ready priority.
+        const std::uint32_t prio = lowestSetBit( priorityBitmap );
+        const std::uint32_t readyMask = readyTasks[prio];
+
+        // Round-robin within the level: take the first ready task with an id greater than the one
+        // scheduled last at this level, otherwise wrap around to the lowest id.
+        const std::uint32_t firstCandidate = static_cast<std::uint32_t>(lastScheduledId[prio]) + 1u;
+        std::uint32_t candidates = 0u;
+        if( firstCandidate < 32u )
+        {
+            candidates = readyMask & ~((1u << firstCandidate) - 1u);
+        }
+        if( candidates == 0u )
+        {
+            candidates = readyMask;
+        }
+
+        const std::uint32_t id = lowestSetBit( candidates );
+        TaskData* ptrNextTask = tasks[id];
+        assert( ptrNextTask != nullptr );
+
+        // Remove the selected task from its ready list
+        readyTasks[prio] &= ~(1u << id);
+        if( readyTasks[prio] == 0u )
+        {
+            priorityBitmap &= ~(1u << prio);
+        }
+
+        lastScheduledId[prio] = static_cast<std::uint8_t>(id);
+        ptrNextTask->setState( TaskStateType::eRunning );
+        currentTask = ptrNextTask;
     }
 
     void Kernel::tick()

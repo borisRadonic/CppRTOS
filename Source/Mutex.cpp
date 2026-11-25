@@ -48,7 +48,6 @@ namespace CppRtos
                 
                 if (count <= 0)
                 {
-                    ptrKernel->enterCritical();
                     count++;
                     owner = ptrTaskData;
                     ptrKernel->exitCritical();

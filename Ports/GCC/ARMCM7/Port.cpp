@@ -1,3 +1,4 @@
+#include <cassert>
 #include "Port.hpp"
 #include "Config.hpp"
 #include "KernelFactory.hpp"
@@ -89,20 +90,24 @@ namespace CppRtos
 			ptrKernel->tick();
 		}
 
-		inline void Port::enterCritical()
+		// Not 'inline': these are called from other translation units (Kernel, Mutex, Semaphore, ...).
+		void Port::enterCritical()
 		{
+			// Mask kernel-aware interrupts first, then update the nesting counter,
+			// so the counter itself is only modified inside the critical section.
+			setInterruptPriorityAndGetOriginal();
 			nestingCounter++;
-			setInterruptPriorityAndGetOriginal(); //disable interrupts
 		}
 
-		inline void Port::exitCritical()
+		void Port::exitCritical()
 		{
-			if( nestingCounter != 0 )
+			assert( nestingCounter != 0u );
+			if( nestingCounter == 0u )
 			{
-				//assert( _nestingCounter != 0)
-				//while(true) {};
+				// Unbalanced exitCritical(): do not underflow the counter.
+				return;
 			}
-			
+
 			nestingCounter--;
 			if( nestingCounter == 0u )
 			{
@@ -137,13 +142,14 @@ namespace CppRtos
 		
 		extern "C" void SysTick_Handler( void )
 		{
-			uint32_t  pri = setInterruptPriorityAndGetOriginal();
 			setGlobalPointers();
+			// Use the nesting critical section (not raw BASEPRI writes), so kernel functions called
+			// from tick() that enter/exit critical sections do not unmask interrupts prematurely.
+			gPtrPort->enterCritical();
 			gPtrPort->incrementTickCount();
 			gPtrPort->tick();
 			NVIC_ICSR = ICSR_PENDSVSET_BIT;
-			assert( pri != 10000 );
-			setInterruptBasePriority( 0 );
+			gPtrPort->exitCritical();
 		}
 
 		void Port::validateInterruptPriority() const
