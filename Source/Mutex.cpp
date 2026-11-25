@@ -3,22 +3,22 @@
 
 namespace CppRtos
 {
-
     Mutex::Mutex()
-    : count(0)
-    , owner ( nullptr )
+    : owner ( nullptr )
     {
     }
 
     Mutex::~Mutex()
     {
-        // Ensure no tasks are blocked when the mutex is destroyed
-        while (!blockedTasks.isEmpty())
+        // Ensure no tasks stay blocked when the mutex is destroyed: they return with a timeout
+        if (!waitingTasks.isEmpty())
         {
-            TaskData* ptrUnblockedTask = blockedTasks.dequeue();
-            if (ptrUnblockedTask != nullptr)
+            Kernel* ptrKernel = KernelFactory::getInstance().getKernel();
+            if (ptrKernel != nullptr)
             {
-                ptrUnblockedTask->setState(TaskStateType::eReady);
+                ptrKernel->enterCritical();
+                static_cast<void>(ptrKernel->wakeAll(waitingTasks, WakeReason::eTimeout));
+                ptrKernel->exitCritical();
             }
         }
     }
@@ -29,62 +29,62 @@ namespace CppRtos
         Kernel* ptrKernel = ptrKernelFactory.getKernel();
         assert( ptrKernel->isInsideInterrupt() == false );
 
+        if( ptrKernel->isInsideInterrupt() )
+        {
+            return MutexResult::ErrorCalledFromISR;
+        }
+
+        ptrKernel->enterCritical();
         TaskData* ptrTaskData = ptrKernel->getCurrentTask();
+
+        if( owner == nullptr )
+        {
+            owner = ptrTaskData;
+            ptrTaskData->incrementHeldMutexCount();
+            ptrKernel->exitCritical();
+            return MutexResult::Success;
+        }
 
         if( owner == ptrTaskData )
         {
-            // Handle recursive mutex acquisition if needed
+            ptrKernel->exitCritical();
             return MutexResult::AlreadyOwned;
         }
 
-        if( !ptrKernel->isInsideInterrupt())
-        {                               
-            bool waitForever = (ticksTimeout == WAIT_FOREVER);
-            std::uint64_t end = ticksTimeout + ptrKernel->getTickCount();
-
-            while (true)
-            {
-                ptrKernel->enterCritical();
-                
-                if (count <= 0)
-                {
-                    ptrKernel->enterCritical();
-                    count++;
-                    owner = ptrTaskData;
-                    ptrKernel->exitCritical();
-                    return MutexResult::Success;
-                }
-                else
-                {
-                    if (!waitForever && ptrKernel->getTickCount() > end)
-                    {
-                        ptrKernel->exitCritical();
-                        return MutexResult::Timeout;
-                    }
-
-                    if( owner->getPriority() < ptrTaskData->getPriority() )
-                    {
-                        owner->setPriority( ptrTaskData->getPriority() );
-                    }
-                        
-                    if (!blockedTasks.isFull())
-                    {                           
-                        // The exchange failed, expected now holds the current value of _count
-                        if (ptrTaskData->getState() == TaskStateType::eRunning)
-                        {
-                            ptrKernel->resetTaskReady(ptrTaskData, TaskStateType::eBlocked);
-                        }
-                        blockedTasks.enqueue(ptrTaskData);
-                    }
-
-                    ptrKernel->exitCritical();
-                    
-                    // Switch context
-                    ptrKernel->yield();
-                }
-            }                
+        if( ticksTimeout == 0u )
+        {
+            ptrKernel->exitCritical();
+            return MutexResult::Timeout;
         }
-        return MutexResult::ErrorCalledFromISR;
+
+        // Priority inheritance: the owner runs at least at the priority of the waiting task
+        if( isHigherPriority( ptrTaskData->getPriority(), owner->getPriority() ) )
+        {
+            ptrKernel->changeTaskPriority( owner, ptrTaskData->getPriority() );
+        }
+
+        ptrKernel->blockCurrentTask( waitingTasks, ticksTimeout );
+        ptrKernel->exitCritical();
+        ptrKernel->yield();
+
+        // Resumed: ownership was handed over by release(), or the wait timed out
+        ptrKernel->enterCritical();
+        const WakeReason reason = ptrTaskData->getWakeReason();
+        if( (reason != WakeReason::eSignaled) && (owner != nullptr) && (owner->getHeldMutexCount() == 1u) )
+        {
+            // This waiter is gone: the owner keeps only the priority still required by the remaining waiters.
+            // If the owner holds more than one mutex, the inherited priority is kept until it releases them.
+            TaskPriority target = owner->getBasePriority();
+            const TaskPriority highestWaiter = ptrKernel->getHighestWaiterPriority( waitingTasks );
+            if( isHigherPriority( highestWaiter, target ) )
+            {
+                target = highestWaiter;
+            }
+            ptrKernel->changeTaskPriority( owner, target );
+        }
+        ptrKernel->exitCritical();
+
+        return (reason == WakeReason::eSignaled) ? MutexResult::Success : MutexResult::Timeout;
     }
 
     MutexResult Mutex::release()
@@ -93,56 +93,54 @@ namespace CppRtos
         Kernel* ptrKernel = ptrKernelFactory.getKernel();
         assert( ptrKernel->isInsideInterrupt() == false );
 
+        if( ptrKernel->isInsideInterrupt() )
+        {
+            return MutexResult::ErrorCalledFromISR;
+        }
+
+        ptrKernel->enterCritical();
+
         if( owner == nullptr )
         {
+            ptrKernel->exitCritical();
             return MutexResult::Success;
         }
 
-        if( !ptrKernel->isInsideInterrupt())
+        TaskData* ptrTaskData = ptrKernel->getCurrentTask();
+        if( ptrTaskData != owner )
         {
-            TaskData* ptrTaskData = ptrKernel->getCurrentTask();
-
-            if (( ptrTaskData != nullptr) && (ptrTaskData == owner) )
-            {
-                // Disable interrupts
-                ptrKernel->enterCritical();
-                
-                count--;
-                owner = nullptr;
-
-                if (!blockedTasks.isEmpty())
-                {
-                    TaskData* ptrUnblockedTask = blockedTasks.dequeue();
-                    ptrKernel->setTaskReady(ptrUnblockedTask);
-
-                    // Restore the original priority if needed
-                    if (!isAnyTaskBlocking(ptrUnblockedTask->getPriority()))
-                    {
-                        ptrTaskData->resetPriority();
-                    }
-                    
-                }
-                ptrKernel->exitCritical();
-                // Switch context
-                ptrKernel->yield();
-                return MutexResult::Success;
-            }
+            ptrKernel->exitCritical();
             return MutexResult::NotOwner;
         }
-        return MutexResult::ErrorCalledFromISR;
-    }
 
-    bool Mutex::isAnyTaskBlocking(CppRtos::TaskPriority priority)
-    {
-        // Check if any tasks in the blocked queue have the given priority
-        for (size_t i = 0; i < blockedTasks.getSize(); ++i)
-        {   
-            TaskData* ptrTask = blockedTasks.getAt( i );  
-            if (ptrTask->getPriority() == priority)
+        // Undo priority inheritance once the task owns no mutex anymore
+        ptrTaskData->decrementHeldMutexCount();
+        if( ptrTaskData->getHeldMutexCount() == 0u )
+        {
+            ptrKernel->changeTaskPriority( ptrTaskData, ptrTaskData->getBasePriority() );
+        }
+
+        // Hand ownership over to the highest-priority waiter
+        bool switchRequired = false;
+        TaskData* ptrNewOwner = ptrKernel->wakeOne( waitingTasks, WakeReason::eSignaled, switchRequired );
+        owner = ptrNewOwner;
+        if( ptrNewOwner != nullptr )
+        {
+            ptrNewOwner->incrementHeldMutexCount();
+
+            // The new owner inherits the priority of the remaining waiters
+            const TaskPriority highestWaiter = ptrKernel->getHighestWaiterPriority( waitingTasks );
+            if( !waitingTasks.isEmpty() && isHigherPriority( highestWaiter, ptrNewOwner->getPriority() ) )
             {
-                return true;
+                ptrKernel->changeTaskPriority( ptrNewOwner, highestWaiter );
             }
         }
-        return false;
+        ptrKernel->exitCritical();
+
+        if( switchRequired )
+        {
+            ptrKernel->yield();
+        }
+        return MutexResult::Success;
     }
 }

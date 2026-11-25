@@ -5,8 +5,8 @@
 #include <array>
 #include <algorithm>
 #include "Config.hpp"
-#include "Fifo.hpp"
 #include "Kernel.hpp"
+#include "WaitList.hpp"
 
 namespace CppRtos
 {
@@ -119,9 +119,11 @@ namespace CppRtos
       /**
          * @brief Releases (signals) the semaphore, potentially unblocking a waiting task.
          * 
-         * If there are tasks waiting on the semaphore, one of them will be unblocked
-         * and allowed to acquire the semaphore. If no tasks are waiting, the semaphore
-         * count is incremented.
+         * If there are tasks waiting on the semaphore, the highest-priority waiter is unblocked
+         * and the token is handed over to it directly (the count is not incremented). If no tasks
+         * are waiting, the semaphore count is incremented (up to maxCount).
+         * May be called from tasks and from ISRs. A context switch is requested if the woken
+         * task has a higher priority than the current task.
          */
         void signal();
 
@@ -129,7 +131,7 @@ namespace CppRtos
          * @brief Atomically unblocks all tasks pending on the semaphore queue.
          * 
          * This method will make all tasks ready before any task actually executes.
-         * The count of the semaphore will remain unchanged.
+         * The count of the semaphore will remain unchanged. The woken tasks return SemResult::Success.
          * 
          * This can be useful in scenarios where a reset or re-initialization is needed,
          * and all waiting tasks need to be unblocked.
@@ -142,7 +144,7 @@ namespace CppRtos
 
         std::uint32_t count;                                        /**< The current count of the semaphore */
         
-        Fifo<TaskData*, Settings::MAX_TASKS> waitingQueue  = {};    /**< Queue of tasks waiting on the semaphore */
+        WaitList waitingTasks;                                      /**< Tasks waiting on the semaphore (woken by priority, FIFO among equal priorities) */
 
         Kernel* ptrKernel = nullptr;                                /**< Pointer to the singleton kernel instance */
 

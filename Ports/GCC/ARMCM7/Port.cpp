@@ -1,3 +1,5 @@
+#include <cstdint>
+#include <cassert>
 #include "Port.hpp"
 #include "Config.hpp"
 #include "KernelFactory.hpp"
@@ -26,6 +28,9 @@
 	extern "C" void setInterruptBasePriority( std::uint32_t );
 
 	extern "C" void enableVFP( void );
+
+	/* Called if a task's run() function returns (address placed in the initial LR of each task). */
+	extern "C" void taskReturnedHandler( void );
 
 
 	void taskSwitchContext() noexcept
@@ -89,20 +94,24 @@ namespace CppRtos
 			ptrKernel->tick();
 		}
 
-		inline void Port::enterCritical()
+		// Not 'inline': these are called from other translation units (Kernel, Mutex, Semaphore, ...).
+		void Port::enterCritical()
 		{
+			// Mask kernel-aware interrupts first, then update the nesting counter,
+			// so the counter itself is only modified inside the critical section.
+			setInterruptPriorityAndGetOriginal();
 			nestingCounter++;
-			setInterruptPriorityAndGetOriginal(); //disable interrupts
 		}
 
-		inline void Port::exitCritical()
+		void Port::exitCritical()
 		{
-			if( nestingCounter != 0 )
+			assert( nestingCounter != 0u );
+			if( nestingCounter == 0u )
 			{
-				//assert( _nestingCounter != 0)
-				//while(true) {};
+				// Unbalanced exitCritical(): do not underflow the counter.
+				return;
 			}
-			
+
 			nestingCounter--;
 			if( nestingCounter == 0u )
 			{
@@ -137,13 +146,14 @@ namespace CppRtos
 		
 		extern "C" void SysTick_Handler( void )
 		{
-			uint32_t  pri = setInterruptPriorityAndGetOriginal();
 			setGlobalPointers();
+			// Use the nesting critical section (not raw BASEPRI writes), so kernel functions called
+			// from tick() that enter/exit critical sections do not unmask interrupts prematurely.
+			gPtrPort->enterCritical();
 			gPtrPort->incrementTickCount();
 			gPtrPort->tick();
 			NVIC_ICSR = ICSR_PENDSVSET_BIT;
-			assert( pri != 10000 );
-			setInterruptBasePriority( 0 );
+			gPtrPort->exitCritical();
 		}
 
 		void Port::validateInterruptPriority() const
@@ -152,6 +162,11 @@ namespace CppRtos
 
 		void Port::startScheduler()
 		{
+			// Mask kernel-aware interrupts until the first task runs. Otherwise a SysTick between
+			// enabling interrupts and the SVC in startInitialTask would pend PendSV with no valid
+			// task context. SVC_Handler clears BASEPRI when it starts the first task.
+			disableInterrupts();
+
 		 	// Make PendSV and SysTick the lowest priority interrupts
 			NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 16)) | NVIC_PENDSV_PRI;
         	NVIC_SHPR3 = (NVIC_SHPR3 & ~(0xFF << 24)) | NVIC_SYSTICK_PRI;
@@ -194,6 +209,20 @@ namespace CppRtos
 			};
 		}
 
+		extern "C" void taskReturnedHandler( void )
+		{
+			// A task's run() function must never return
+			setGlobalPointers();
+			if( gPtrPort != nullptr )
+			{
+				gPtrPort->taskExitError(); // does not return
+			}
+			setInterruptPriorityAndGetOriginal();
+			while( true )
+			{
+			}
+		}
+
 		extern "C" void callFirstTime(void)
 		{
 			setGlobalPointers();
@@ -233,67 +262,35 @@ namespace CppRtos
 		*/
 		void* Port::initialiseStack(void* pxTopOfStack, void* pvParameters )
 		{
-			 /* Simulate the stack frame as it would be created by a context switch interrupt. */
+			static_cast<void>(pvParameters);
 
-			 auto topOfStack = static_cast<std::uint32_t*>(pxTopOfStack);
+			/* Simulate the stack frame as it would be created by a context switch interrupt. */
 
-			 /* Offset added to account for the way the MCU uses the stack on entry/exit of interrupts, and to ensure alignment. */
-			 topOfStack--;
+			/* AAPCS: the stack pointer must be 8-byte aligned at a public interface and on exception entry. */
+			auto topOfStack = reinterpret_cast<std::uint32_t*>( reinterpret_cast<std::uintptr_t>(pxTopOfStack) & ~static_cast<std::uintptr_t>(7u) );
 
-			 *topOfStack = 0x01000000;   /* xPSR: Set the Thumb state bit (T bit) */
-			 topOfStack--;
+			/* Hardware-stacked exception frame (8 words, R0 at the lowest address). The frame starts
+			   8-byte aligned, so after exception return the task starts with an aligned stack. */
+			topOfStack--;
+			*topOfStack = 0x01000000u;                                              /* xPSR: Thumb state bit (T bit) */
+			topOfStack--;
+			/* For strict compliance with the Cortex-M spec, the start address loaded into the PC must have bit 0 clear. */
+			*topOfStack = reinterpret_cast<std::uint32_t>( &callFirstTime ) & 0xfffffffeUL;  /* PC */
+			topOfStack--;
+			*topOfStack = reinterpret_cast<std::uint32_t>( &taskReturnedHandler );   /* LR: reached if run() returns */
+			topOfStack -= 5;                                                        /* R12, R3, R2, R1 (not initialised) */
+			*topOfStack = 0u;                                                       /* R0: not used */
 
-			/* Adress Mask 0xfffffffeUL For strict compliance with the Cortex-M spec the task start
-   			address should have bit-0 clear, as it is loaded into the PC on exit from an ISR. */
-			*topOfStack =  (uint32_t) callFirstTime & 0xfffffffeUL; // PC;
-			 topOfStack--;
+			/* Software-saved context as restored by PendSV_Handler / SVC_Handler: ldmia {r4-r11, r14} */
+			topOfStack--;
+			*topOfStack = 0xfffffffdu;                                              /* EXC_RETURN: thread mode, PSP, no FPU frame */
+			for( std::uint32_t reg = 0u; reg < 8u; ++reg )
+			{
+				topOfStack--;
+				*topOfStack = 0u;                                                   /* R11 .. R4 */
+			}
 
-			 void (Port::*funcPtr)() = &Port::taskExitError;
-		     // Convert the member function pointer to uintptr_t
-			 FunctionPointerUnion funcUnion = {};
-			 funcUnion.taskExitError = funcPtr;
-     		// Get the integer representation of the function pointer
-			uint32_t funcPtrInt32 = funcUnion.uintRepresentation;
-
-			/*Return Address*/
-			 *topOfStack = funcPtrInt32;             /* LR */   		       
-			 topOfStack -= 5;                        /* skip R12, R3, R2 and R1. */
-
-			 *topOfStack = 0u; /* R0: Argument - return value -not used at the moment*/
-			 topOfStack--;
-
-			 /*R11*/
-			 *topOfStack = 0xfffffffdu;
-			  topOfStack--;
-			 
-			 /*R10*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			 /*R9*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			 /*R8*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			 /*R7*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			 /*R6*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			/*R5*/
-			 *topOfStack = 0x00000000u;
-			 topOfStack--;
-
-			/*R4*/
-			 *topOfStack = 0x00000000u;
-			  topOfStack--;
-			 return static_cast<void*>(topOfStack);
+			return static_cast<void*>(topOfStack);
 		}	
 	}
 }

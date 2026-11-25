@@ -71,5 +71,22 @@ namespace CppRtos
         {
             return ptrKernel->getSysTimerCount();
         }
+
+        void InternalKernelAcessor::blockCurrentTask(WaitList& waitList, std::uint32_t timeoutTicks)
+        {
+            ptrKernel->blockCurrentTask(waitList, timeoutTicks);
+        }
+
+        bool InternalKernelAcessor::wakeOne(WaitList& waitList)
+        {
+            bool switchRequired = false;
+            static_cast<void>(ptrKernel->wakeOne(waitList, WakeReason::eSignaled, switchRequired));
+            return switchRequired;
+        }
+
+        [[nodiscard]] WakeReason InternalKernelAcessor::getCurrentTaskWakeReason() const
+        {
+            return ptrKernel->getCurrentTask()->getWakeReason();
+        }
     }
 }

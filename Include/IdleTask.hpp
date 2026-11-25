@@ -57,6 +57,6 @@ namespace CppRtos
          * The stack is statically allocated using aligned storage to ensure it meets the alignment requirements.
          * This stack is used by the idle task to maintain its execution context.
          */
-        std::aligned_storage_t<IDLE_TASK_STACK_SIZE, 4u> stack{};
+        std::aligned_storage_t<IDLE_TASK_STACK_SIZE, 8u> stack{}; // 8-byte aligned (AAPCS)
     };
 }

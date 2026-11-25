@@ -14,6 +14,7 @@
 #include "SpinLock.hpp"
 #include "IdleTask.hpp"
 #include "Fifo.hpp"
+#include "WaitList.hpp"
 
 namespace CppRtos
 {
@@ -258,7 +259,12 @@ namespace CppRtos
     	/**
 		* @brief Selects the task with the highest priority for execution.
 		*
-		* This function selects the highest-priority task that is ready to run.
+		* The currently running task (if still in the running state) is put back into its
+		* ready list, then the highest-priority ready task is selected. Tasks of equal
+		* priority are scheduled round-robin. The idle task is selected when nothing else is ready.
+		*
+		* @note Must be called with kernel interrupts masked (PendSV context or inside a
+		*       critical section). The function does not enter a critical section itself.
 		*/
     	void selectHighestPriorityTask();
 
@@ -298,6 +304,70 @@ namespace CppRtos
 		 * @param newState The new state to set for the task.
 		 */
     	void resetTaskReady(CppRtos::TaskData* ptrTask, TaskStateType newState);
+
+    	/**
+		 * @brief Blocks the current task on a wait list.
+		 *
+		 * Moves the running task into the blocked state and adds it to the wait list. If a
+		 * timeout is given, the task is also woken by tick() with WakeReason::eTimeout when it expires.
+		 * The caller must call exitCritical() and then yield() so the context switch takes place;
+		 * after the task resumes, the outcome is available via TaskData::getWakeReason().
+		 *
+		 * @note Must be called inside a critical section, from task context.
+		 *
+		 * @param waitList Wait list of the kernel object the task waits for.
+		 * @param timeoutTicks Timeout in ticks, WAIT_FOREVER to wait without timeout (must not be 0).
+		 */
+    	void blockCurrentTask(WaitList& waitList, std::uint32_t timeoutTicks);
+
+    	/**
+		 * @brief Wakes the highest-priority waiter of a wait list (FIFO among equal priorities).
+		 *
+		 * @note Must be called inside a critical section. May be called from an ISR.
+		 *
+		 * @param waitList Wait list to wake a task from.
+		 * @param reason Wake reason stored in the woken task.
+		 * @param switchRequired Set to true if the woken task has a higher priority than the current task.
+		 * @return The woken task, or nullptr if the wait list was empty.
+		 */
+    	TaskData* wakeOne(WaitList& waitList, WakeReason reason, bool& switchRequired);
+
+    	/**
+		 * @brief Wakes all waiters of a wait list.
+		 *
+		 * @note Must be called inside a critical section. May be called from an ISR.
+		 *
+		 * @return true if a context switch is required (a woken task has a higher priority than the current task).
+		 */
+    	bool wakeAll(WaitList& waitList, WakeReason reason);
+
+    	/**
+		 * @brief Wakes a specific task that is waiting on a wait list.
+		 *
+		 * @note Must be called inside a critical section. May be called from an ISR.
+		 *
+		 * @param ptrTask Task to wake; it is removed from its wait list and its timeout is cancelled.
+		 * @param reason Wake reason stored in the woken task.
+		 * @param switchRequired Set to true if the woken task has a higher priority than the current task.
+		 */
+    	void wakeTask(TaskData* ptrTask, WakeReason reason, bool& switchRequired);
+
+    	/**
+		 * @brief Returns the highest priority among the waiters of a wait list.
+		 *
+		 * @return The highest waiter priority, or PRIORITY_IDLE if the wait list is empty.
+		 */
+    	[[nodiscard]] TaskPriority getHighestWaiterPriority(const WaitList& waitList) const;
+
+    	/**
+		 * @brief Changes the effective priority of a task (priority inheritance).
+		 *
+		 * Keeps the ready lists consistent: a ready task is moved to the ready list of the new priority.
+		 * The base priority is not changed.
+		 *
+		 * @note Must be called inside a critical section.
+		 */
+    	void changeTaskPriority(TaskData* ptrTask, TaskPriority newPriority);
 
     	/**
 		* @brief Enters a critical section.
@@ -408,7 +478,7 @@ namespace CppRtos
 
     	TaskData* currentTask = nullptr;										/**< Pointer to the currently executing task. */
 
-    	TaskPriority highestTaskPriority = TaskPriority::PRIORITY_IDLE;			/**< Highest priority of the tasks ready to run. */
+    	std::array<std::uint8_t, MAX_PRIORY_LEVELS> lastScheduledId = {};		/**< Per priority level: id of the task scheduled last (round-robin cursor). */
 
     	std::uint8_t taskCount = 0u;											/**< The current number of tasks added to the Kernel. */
 
@@ -416,7 +486,9 @@ namespace CppRtos
 
     	IdleTask idleTask;														/**< The idle task that runs when no other task is ready. */
 
-    	std::uint64_t sleepingTasksBitmap = 0u;									/**< Bitmap tracking sleeping tasks. */
+    	std::uint64_t sleepingTasksBitmap = 0u;									/**< Bitmap of tasks with a pending wake-up time (sleeping, or blocked with timeout). */
+
+    	std::uint32_t waitSequenceCounter = 0u;									/**< Incremented each time a task starts waiting (FIFO order in wait lists). */
 
     	std::array<std::uint64_t, Settings::MAX_TASKS> taskWakeUpTimes = {0u};	/**< Array of wake-up times for sleeping tasks. */
 

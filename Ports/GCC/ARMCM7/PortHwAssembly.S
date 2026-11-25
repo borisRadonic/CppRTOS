@@ -4,7 +4,7 @@
 .thumb
 .syntax unified
 
-#define MAX_SYSCALL_INTERRUPT_PRIORITY 5u
+#include "PortConfig.h"
 
 .global startInitialTask
 .thumb_func
@@ -45,13 +45,14 @@ setPrivilegedMode:
 .thumb_func
 .type setInterruptPriorityAndGetOriginal, %function
 setInterruptPriorityAndGetOriginal:
-    mrs r0, basepri                      // Read the current value of the BASEPRI register into r0
-    mov r1, #MAX_SYSCALL_INTERRUPT_PRIORITY  // Move the value of MAX_SYSCALL_INTERRUPT_PRIORITY into r1
-    cpsid i                              // Disable interrupts
+    mrs r0, basepri                      // Read the current value of the BASEPRI register into r0 (return value)
+    mov r1, #PORT_BASEPRI_SYSCALL        // BASEPRI value for kernel critical sections (priority shifted into implemented bits)
+    mrs r2, primask                      // Save the current PRIMASK state
+    cpsid i                              // Disable interrupts while BASEPRI is changed (Cortex-M7 r0p1 erratum 837070)
     msr basepri, r1                      // Set the BASEPRI register to the new value
     isb                                  // Instruction Synchronization Barrier
     dsb                                  // Data Synchronization Barrier
-    cpsie i                              // Enable interrupts
+    msr primask, r2                      // Restore the previous PRIMASK state instead of unconditionally enabling interrupts
     bx lr                                // Return from function
     .size setInterruptPriorityAndGetOriginal, .-setInterruptPriorityAndGetOriginal
 

@@ -4,7 +4,7 @@
 .thumb
 .syntax unified
 
-#define MAX_SYSCALL_INTERRUPT_PRIORITY 5u
+#include "PortConfig.h"
 
 .global PendSV_Handler
 .thumb_func
@@ -24,7 +24,7 @@ PendSV_Handler:
     str r0, [r2]                       // Store the updated stack pointer (r0) into the current TCB (pointed to by r2)
 
     stmdb sp!, {r0, r3}                // Store r0 and r3 on the stack and decrement SP
-    mov r0, #MAX_SYSCALL_INTERRUPT_PRIORITY // Move the value of configMAX_SYSCALL_INTERRUPT_PRIORITY into r0
+    mov r0, #PORT_BASEPRI_SYSCALL      // BASEPRI value for kernel critical sections (priority shifted into implemented bits)
     msr basepri, r0                    // Move the value of r0 into the BASEPRI register (set interrupt priority)
     dsb                                // Data Synchronization Barrier to ensure all memory accesses complete
     isb                                // Instruction Synchronization Barrier to ensure subsequent instructions use updated values

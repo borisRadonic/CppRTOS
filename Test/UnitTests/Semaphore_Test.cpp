@@ -30,7 +30,7 @@ public:
 class SemaphoreTest : public ::testing::Test
 {
 public:
-    std::aligned_storage_t<sizeof(CppRtos::Kernel), 4> _prealoc_kernel_mem;
+    std::aligned_storage_t<sizeof(CppRtos::Kernel), alignof(CppRtos::Kernel)> _prealoc_kernel_mem;
     Kernel* kernel;
     MockTask mockTask1;
     MockTask mockTask2;
@@ -53,6 +53,8 @@ public:
 
     void TearDown() override
     {
+        delete ptrSem1;
+        ptrSem1 = nullptr;
         CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
         kernelFactory.destroy(&_prealoc_kernel_mem);
     }
@@ -60,154 +62,158 @@ public:
 
 };
 
+
 /*
-Test Scenario:
-
-- **Task 1**: Highest priority.
-- **Task 2**: Lower priority.
-
-### Sequence of Events:
-
-1. **Task 1 Running**:
-   - Task 1 is executing and signals the semaphore.
-   - Since no tasks are currently waiting on the semaphore, no task is unblocked, and the semaphore's internal counter is incremented.
-
-2. **Kernel Yields**:
-   - The kernel's scheduler continues to run Task 1 because it has the highest priority.
-
-3. **Task 1 Voluntarily Yields**:
-   - Task 1 explicitly yields the CPU by calling the `task->yield()` function.
-   - This action allows lower-priority tasks, such as Task 2, to be scheduled.
-
-4. **Task 2 Scheduling**:
-   - The scheduler, finding that Task 1 has yielded, schedules Task 2, as it is the next highest-priority task that is ready to run.
-
-5. **Task 2 Running**:
-   - Task 2 starts running and attempts to acquire the semaphore.
-   - Since Task 1 previously signaled the semaphore, Task 2 successfully acquires it.
-
-### Key Points:
-- Task 2 will only be scheduled after Task 1 yields, blocks, or completes.
-- The semaphore signaled by Task 1 allows Task 2 to proceed when it is eventually scheduled.
+Semaphore with strict priority scheduling and direct handoff:
+- signal() without waiters stores the token (count is incremented up to maxCount).
+- yield() only gives the CPU to tasks of the same priority, so a lower-priority task does not run.
 */
-
 TEST_F(SemaphoreTest, TestSemaphore1)
 {
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
     Port::Port& port = kernel->getPort();
 
-    port.setTaskReady(ptrTaskData1);
-    port.setTaskReady(ptrTaskData2);
     port.selectHighestPriorityTask();
     EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is running
-    /*Task 1 signals semaphore1*/
-    EXPECT_THROW(
-    {
-        ptrSem1->signal();
-    }, CppRtos::UnitTestException);
+
+    // Task 1 signals the semaphore: nobody waits, no context switch required
+    EXPECT_NO_THROW(ptrSem1->signal());
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+
+    // Task 1 yields: no other task of the same priority is ready, task 1 keeps running
+    EXPECT_THROW(mockTask1.yield(), CppRtos::UnitTestException);
     port.selectHighestPriorityTask();
-    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is still running
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
 
-    //Task 1 gives CPU time to others (Task2)
-
-    EXPECT_THROW(
-    {
-       mockTask1.yield();
-    }, CppRtos::UnitTestException);
-    
-    port.selectHighestPriorityTask();
-    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
-
-
-    /*Task 2 waits on semaphore1*/
+    // Task 1 takes the stored token without blocking
     EXPECT_EQ(ptrSem1->wait(WAIT_FOREVER), SemResult::Success);
+
+    // No token left: zero timeout returns immediately
+    EXPECT_EQ(ptrSem1->wait(0u), SemResult::Timeout);
 }
 
 /*
-Test Scenario:
-
-- **Task 1**: Highest priority.
-- **Task 2**: Lower priority.
-
-### Sequence of Events:
-
-1. **Task 2 Running and Blocking**:
-   - Task 2 is currently running and attempts to acquire a semaphore.
-   - The semaphore is not available (e.g., its count is zero), so Task 2 is blocked and moved to the waiting state.
-   - Task 2 will remain blocked until the semaphore is signaled by another task or an ISR.
-
-2. **Task 1 Running**:
-   - After Task 2 is blocked, the scheduler runs Task 1, which has the highest priority.
-   - Task 1 executes and eventually signals the semaphore that Task 2 is waiting on.
-   - Signaling the semaphore increments its count, unblocking Task 2 and moving it to the ready state.
-
-3. **Task 1 Yields**:
-   - Task 1, after signaling the semaphore, calls `task->yield()` to voluntarily give up the CPU.
-   - This allows the scheduler to consider other tasks that are ready to run.
-
-4. **Task 2 Scheduling**:
-   - The scheduler, upon Task 1 yielding, checks the ready queue and finds Task 2, which is now ready because it was unblocked when Task 1 signaled the semaphore.
-   - Task 2 is scheduled to run next since Task 1 has yielded.
-
-5. **Task 2 Running**:
-   - Task 2, now unblocked and scheduled, resumes execution and successfully acquires the semaphore.
-   - Task 2 continues its execution based on the newly acquired semaphore.
-
-### Key Points:
-- Task 2 becomes blocked when it tries to acquire a semaphore that is not available.
-- Task 1, while running, signals the semaphore, which unblocks Task 2.
-- Task 2 is scheduled to run after Task 1 voluntarily yields the CPU, and it then successfully acquires the semaphore.
+Blocking wait and handoff:
+- Task 1 (high) waits on an empty semaphore and blocks, task 2 (lower) runs.
+- Task 2 signals: the token is handed over to task 1, which preempts task 2.
 */
-
-
 TEST_F(SemaphoreTest, TestSemaphore2)
 {
     TaskData* ptrTaskData1 = mockTask1.getTaskData();
     TaskData* ptrTaskData2 = mockTask2.getTaskData();
 
     Port::Port& port = kernel->getPort();
-    
-    port.setTaskReady(ptrTaskData1);
-    port.setTaskReady(ptrTaskData2);
+
     port.selectHighestPriorityTask();
     EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is running
 
-    //Task 1 gives CPU time to others (Task2)
-
-    EXPECT_THROW(
-    {
-        mockTask1.yield();
-    }, CppRtos::UnitTestException);
+    // Task 1 waits and blocks
+    EXPECT_THROW(ptrSem1->wait(WAIT_FOREVER), CppRtos::UnitTestException);
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eBlocked);
 
     port.selectHighestPriorityTask();
     EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
 
-    //Task 2 is currently running and attempts to acquire a semaphore.
-    EXPECT_THROW(
-    {
-        ptrSem1->wait( WAIT_FOREVER );
-    }, CppRtos::UnitTestException);
-    
-    //Task 2 is blocked and moved to the waiting state.
-    port.selectHighestPriorityTask();
-    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); //task 1 is running again
-
-    /*Task 1 signals semaphore1*/
-    EXPECT_THROW(
-    {
-        ptrSem1->signal();
-    }, CppRtos::UnitTestException);
-    port.selectHighestPriorityTask();
-    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task1 is still running
-
-    //Task 1 gives CPU time to others (Task2)
-
-    EXPECT_THROW(
-    {
-        mockTask1.yield();
-    }, CppRtos::UnitTestException);
+    // Task 2 signals: task 1 is woken and has a higher priority -> context switch requested
+    EXPECT_THROW(ptrSem1->signal(), CppRtos::UnitTestException);
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
+    EXPECT_EQ(ptrTaskData1->getWakeReason(), WakeReason::eSignaled);
 
     port.selectHighestPriorityTask();
-    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // task2 is running
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // task 1 preempts task 2
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
+
+    // The token was handed over, not stored
+    EXPECT_EQ(ptrSem1->wait(0u), SemResult::Timeout);
+}
+
+TEST_F(SemaphoreTest, WaitTimesOut)
+{
+    TaskData* ptrTaskData1 = mockTask1.getTaskData();
+    TaskData* ptrTaskData2 = mockTask2.getTaskData();
+
+    Port::Port& port = kernel->getPort();
+
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+
+    EXPECT_THROW(ptrSem1->wait(3u), CppRtos::UnitTestException);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
+
+    for (int i = 0; i < 2; ++i)
+    {
+        port.incrementTickCount();
+        port.tick();
+        port.selectHighestPriorityTask();
+        EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eBlocked);
+        EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
+    }
+
+    port.incrementTickCount();
+    port.tick();
+    EXPECT_EQ(ptrTaskData1->getWakeReason(), WakeReason::eTimeout);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+
+    // A later signal does not wake the timed-out task again, the token is stored
+    EXPECT_NO_THROW(ptrSem1->signal());
+    EXPECT_EQ(ptrSem1->wait(0u), SemResult::Success);
+}
+
+TEST_F(SemaphoreTest, SignalFromIsrWakesHighestPriorityWaiterFirst)
+{
+    TaskData* ptrTaskData1 = mockTask1.getTaskData();
+    TaskData* ptrTaskData2 = mockTask2.getTaskData();
+
+    Port::Port& port = kernel->getPort();
+
+    // Task 1 sleeps, task 2 (lower priority) starts waiting first
+    port.selectHighestPriorityTask();
+    EXPECT_THROW(mockTask1.sleep(1u), CppRtos::UnitTestException);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
+    EXPECT_THROW(ptrSem1->wait(WAIT_FOREVER), CppRtos::UnitTestException);
+
+    // Task 1 wakes up and also waits
+    port.incrementTickCount();
+    port.tick();
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+    EXPECT_THROW(ptrSem1->wait(WAIT_FOREVER), CppRtos::UnitTestException);
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask()->getPriority(), TaskPriority::PRIORITY_IDLE);
+
+    // Signal from an ISR: the higher-priority waiter is woken, although task 2 waited longer
+    port.unitTestSetisInsideInterrupt(true);
+    EXPECT_THROW(ptrSem1->signal(), CppRtos::UnitTestException); // context switch requested
+    port.unitTestSetisInsideInterrupt(false);
+
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eBlocked);
+
+    port.selectHighestPriorityTask();
+    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+}
+
+TEST_F(SemaphoreTest, FlushWakesAllWaiters)
+{
+    TaskData* ptrTaskData1 = mockTask1.getTaskData();
+    TaskData* ptrTaskData2 = mockTask2.getTaskData();
+
+    Port::Port& port = kernel->getPort();
+
+    port.selectHighestPriorityTask();
+    EXPECT_THROW(ptrSem1->wait(WAIT_FOREVER), CppRtos::UnitTestException);
+    port.selectHighestPriorityTask();
+    EXPECT_THROW(ptrSem1->wait(WAIT_FOREVER), CppRtos::UnitTestException);
+    port.selectHighestPriorityTask(); // idle runs
+
+    EXPECT_THROW(ptrSem1->flush(), CppRtos::UnitTestException);
+    EXPECT_EQ(ptrTaskData1->getWakeReason(), WakeReason::eSignaled);
+    EXPECT_EQ(ptrTaskData2->getWakeReason(), WakeReason::eSignaled);
+    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
+    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
 }

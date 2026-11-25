@@ -152,9 +152,9 @@ void timerCallback2(void* test)
 		while (1);  // Infinite loop to catch Usage Fault
 	}
 
-static std::aligned_storage_t<2048,4> _stack_task1;
-static std::aligned_storage_t<2048,4> _stack_task2;
-static std::aligned_storage_t<2048,4> _stack_task3;
+static std::aligned_storage_t<2048,8> _stack_task1;
+static std::aligned_storage_t<2048,8> _stack_task2;
+static std::aligned_storage_t<2048,8> _stack_task3;
 
 CppRtos::Semaphore* semaphore1;
 
@@ -282,17 +282,17 @@ public:
 };
 
 
-static std::aligned_storage_t<sizeof(CppRtos::Kernel),4> _prealoc_kernel_mem;
-static std::aligned_storage_t<sizeof(Task1),4> _prealoc_task1;
-static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task2;
-static std::aligned_storage_t<sizeof(Task2),4> _prealoc_task3;
+static std::aligned_storage_t<sizeof(CppRtos::Kernel),alignof(CppRtos::Kernel)> _prealoc_kernel_mem;
+static std::aligned_storage_t<sizeof(Task1),alignof(Task1)> _prealoc_task1;
+static std::aligned_storage_t<sizeof(Task2),alignof(Task2)> _prealoc_task2;
+static std::aligned_storage_t<sizeof(Task2),alignof(Task2)> _prealoc_task3;
 
 
-static std::aligned_storage_t<1024,4> _prealoc_barier;
-static std::aligned_storage_t<sizeof(CppRtos::Mutex),4> _prealoc_mutex1;
-static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer1;
-static std::aligned_storage_t<sizeof(CppRtos::Timer),4> _prealoc_timer2;
-static std::aligned_storage_t<sizeof(CppRtos::Semaphore),4> _prealoc_semaphore1;
+static std::aligned_storage_t<1024,8> _prealoc_barier;
+static std::aligned_storage_t<sizeof(CppRtos::Mutex),alignof(CppRtos::Mutex)> _prealoc_mutex1;
+static std::aligned_storage_t<sizeof(CppRtos::Timer),alignof(CppRtos::Timer)> _prealoc_timer1;
+static std::aligned_storage_t<sizeof(CppRtos::Timer),alignof(CppRtos::Timer)> _prealoc_timer2;
+static std::aligned_storage_t<sizeof(CppRtos::Semaphore),alignof(CppRtos::Semaphore)> _prealoc_semaphore1;
 
 
 void Error_Handler(void)

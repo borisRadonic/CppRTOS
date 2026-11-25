@@ -19,97 +19,62 @@ namespace CppRtos
         ptrKernel->enterCritical();
 
         // Check if the required flags are already set
-        if ((eventFlags & flagsToWaitFor) != 0)
+        if ((eventFlags & flagsToWaitFor) != 0u)
         {
             ptrKernel->exitCritical();
             return true;
         }
 
-        // If timeout is zero, return immediately as no wait is allowed
-        if (timeout == 0)
+        // If timeout is zero (or called from an ISR), return immediately as no wait is allowed
+        if ((timeout == 0u) || ptrKernel->isInsideInterrupt())
         {
             ptrKernel->exitCritical();
             return false;
         }
 
-        // Calculate the end time based on the current tick count and timeout
-        std::uint64_t endTime = ptrKernel->getTickCount() + timeout;
-
-        // Get the current task and block it, storing the flags it's waiting for
+        // Block the current task, storing the flags it's waiting for
         TaskData* task = ptrKernel->getCurrentTask();
-        task->setState(TaskStateType::eBlocked);
-        task->setFlagsToWaitFor(flagsToWaitFor);  // Store the flags the task is waiting for
-        waitingTasks.enqueue(task);
-
+        task->setFlagsToWaitFor(flagsToWaitFor);
+        ptrKernel->blockCurrentTask(waitingTasks, timeout);
         ptrKernel->exitCritical();
         ptrKernel->yield();
 
-        // Loop to periodically check if any event flags are set or if the timeout has expired
-        while (true)
-        {
-            ptrKernel->enterCritical();
+        // Resumed: woken by setEvents() or by the timeout
+        ptrKernel->enterCritical();
+        const WakeReason reason = task->getWakeReason();
+        task->setFlagsToWaitFor(0u);
+        ptrKernel->exitCritical();
 
-            // Check if any of the event flags are set
-            if ((eventFlags & flagsToWaitFor) != 0)
-            {
-                // Remove the task from the waiting queue since the condition is met
-                for (std::size_t i = 0; i < waitingTasks.getSize(); ++i)
-                {
-                    if (waitingTasks.getAt(i) == task)
-                    {
-                        waitingTasks.removeAt(i);
-                        break;
-                    }
-                }
-                ptrKernel->exitCritical();
-                return true;
-            }
-
-            // Check if the current time exceeds the end time, meaning timeout has occurred
-            if (ptrKernel->getTickCount() >= endTime)
-            {
-                // Remove the task from the waiting queue since it has timed out
-                for (std::size_t i = 0; i < waitingTasks.getSize(); ++i)
-                {
-                    if (waitingTasks.getAt(i) == task)
-                    {
-                        waitingTasks.removeAt(i);
-                        break;
-                    }
-                }
-                ptrKernel->exitCritical();
-                return false;
-            }
-
-            ptrKernel->exitCritical();
-            ptrKernel->yield();
-        }
+        return (reason == WakeReason::eSignaled);
     }
 
     void EventGroup::setEvents(std::uint32_t flagsToSet)
     {
-        ptrKernel->enterCritical();
+        bool switchRequired = false;
 
+        ptrKernel->enterCritical();
         eventFlags |= flagsToSet;
 
-        // Process each task in the waiting queue
-        for (std::size_t i = 0; i < waitingTasks.getSize();)
+        // Wake every waiting task whose flags are now set
+        std::uint32_t mask = waitingTasks.getMask();
+        for (std::size_t id = 0u; (id < Settings::MAX_TASKS) && (mask != 0u); ++id)
         {
-            TaskData* task = waitingTasks.getAt(i);
-            if ((eventFlags & task->getFlagsToWaitFor()) != 0u)
+            if ((mask & (1u << id)) != 0u)
             {
-                ptrKernel->setTaskReady(task);
-                task->setFlagsToWaitFor(0u);
-                waitingTasks.removeAt(i);  // Remove the task after setting it as ready
-            }
-            else
-            {
-                ++i;  // Only increment if no removal to avoid skipping elements
+                mask &= ~(1u << id);
+                TaskData* task = ptrKernel->getTask(id);
+                if ((task != nullptr) && ((eventFlags & task->getFlagsToWaitFor()) != 0u))
+                {
+                    ptrKernel->wakeTask(task, WakeReason::eSignaled, switchRequired);
+                }
             }
         }
-
         ptrKernel->exitCritical();
-        ptrKernel->yield();
+
+        if (switchRequired)
+        {
+            ptrKernel->yield();
+        }
     }
 
     void EventGroup::clearEvents(std::uint32_t flagsToClear)

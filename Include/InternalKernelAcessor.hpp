@@ -5,6 +5,7 @@
 #ifndef INTERNALKERNELUTIL_H
 #define INTERNALKERNELUTIL_H
 #include "Task.hpp"
+#include "WaitList.hpp"
 
 namespace CppRtos
 {
@@ -37,6 +38,22 @@ namespace CppRtos
             [[nodiscard]] std::uint64_t getTickCount() const;
 
             [[nodiscard]] std::uint64_t getSysTimerCount() const;
+
+            /**
+             * @brief Blocks the current task on a wait list (see Kernel::blockCurrentTask). Inside a critical section.
+             */
+            void blockCurrentTask(WaitList& waitList, std::uint32_t timeoutTicks);
+
+            /**
+             * @brief Wakes the highest-priority waiter as signaled (see Kernel::wakeOne). Inside a critical section.
+             * @return true if a context switch is required.
+             */
+            bool wakeOne(WaitList& waitList);
+
+            /**
+             * @brief Returns the wake reason of the current task (valid after it resumed from a wait).
+             */
+            [[nodiscard]] WakeReason getCurrentTaskWakeReason() const;
 
         private:
             Kernel* ptrKernel = nullptr;

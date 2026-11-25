@@ -57,6 +57,8 @@ set(UT_SOURCES
     ${PROJECT_SOURCE_DIR}/Mutex_Test.cpp
     ${PROJECT_SOURCE_DIR}/Semaphore_Test.cpp
     ${PROJECT_SOURCE_DIR}/MsgQueue_Test.cpp
+    ${PROJECT_SOURCE_DIR}/EventGroup_Test.cpp
+    ${PROJECT_SOURCE_DIR}/Fifo_Test.cpp
     ${PROJECT_SOURCE_DIR}/Port.cpp
 )
 
@@ -67,6 +69,8 @@ set(CODE_UNDER_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/../../Source/Semaphore.cpp
     ${PROJECT_SOURCE_DIR}/../../Source/Task.cpp
     ${PROJECT_SOURCE_DIR}/../../Source/Timer.cpp
+    ${PROJECT_SOURCE_DIR}/../../Source/EventGroup.cpp
+    ${PROJECT_SOURCE_DIR}/../../Source/InternalKernelAcessor.cpp
 )
 
 message(STATUS "UT sources: ${UT_SOURCES}")

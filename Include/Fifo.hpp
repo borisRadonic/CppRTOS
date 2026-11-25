@@ -68,37 +68,44 @@ namespace CppRtos
         }
 
         /**
-         * @brief Retrieves the item at the specified index.
+         * @brief Retrieves the item at the specified logical index.
          *
-         * If the index is out of bounds, returns a default-constructed T object.
+         * Index 0 is the oldest item (the next one dequeue() returns).
+         * If the index is out of bounds (>= getSize()), returns a default-constructed T object.
          *
-         * @param index The index of the item to retrieve.
+         * @param index The logical index of the item to retrieve.
          * @return The item at the specified index.
          */
-        inline T getAt(const std::size_t index)
+        inline T getAt(const std::size_t index) const
         {
-            if(index < MAX_ITEMS)
+            if (index < size)
             {
-                return buffer[index];
+                return buffer[(head + index) % MAX_ITEMS];
             }
             return T(); // Return default-constructed object if index is out of bounds
         }
 
         /**
-         * @brief Removes the item at the specified position.
+         * @brief Removes the item at the specified logical position.
          *
-         * The function shifts all subsequent items to fill the gap.
+         * Index 0 is the oldest item. All subsequent items are shifted towards the head
+         * to fill the gap, so the FIFO order of the remaining items is kept.
+         * An out-of-bounds position (>= getSize()) is ignored.
          *
-         * @param pos The position of the item to remove.
+         * @param pos The logical position of the item to remove.
          */
         void removeAt(std::size_t pos)
         {
-            for (std::size_t i = pos; i != (tail - 1 + MAX_ITEMS) % MAX_ITEMS; i = (i + 1) % MAX_ITEMS)
+            if (pos >= size)
             {
-                std::size_t next = (i + 1) % MAX_ITEMS;
-                buffer[i] = buffer[next];
+                return;
             }
-            tail = (tail - 1 + MAX_ITEMS) % MAX_ITEMS;
+
+            for (std::size_t i = pos; (i + 1u) < size; ++i)
+            {
+                buffer[(head + i) % MAX_ITEMS] = buffer[(head + i + 1u) % MAX_ITEMS];
+            }
+            tail = (tail + MAX_ITEMS - 1u) % MAX_ITEMS;
             size--;
         }
 

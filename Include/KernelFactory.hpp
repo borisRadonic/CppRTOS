@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <new>
 #include "Kernel.hpp"
 
 namespace CppRtos
@@ -76,6 +78,14 @@ namespace CppRtos
             {
                 return nullptr;
             }
+
+            // The kernel contains 64-bit members: the memory must be suitably aligned
+            assert((platformMemory != nullptr) && ((reinterpret_cast<std::uintptr_t>(platformMemory) % alignof(Kernel)) == 0u));
+            if ((platformMemory == nullptr) || ((reinterpret_cast<std::uintptr_t>(platformMemory) % alignof(Kernel)) != 0u))
+            {
+                return nullptr;
+            }
+
             isCreated = true;
             ptrKernel = new(platformMemory) Kernel();
             return ptrKernel;
@@ -95,6 +105,7 @@ namespace CppRtos
             {
                 static_cast<Kernel*>(platformMemory)->~Kernel();
                 isCreated = false;
+                ptrKernel = nullptr; // Do not leave a dangling pointer to the destroyed kernel
             }
         }
 

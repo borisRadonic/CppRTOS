@@ -6,6 +6,7 @@
 #include <string_view>
 #include <algorithm>
 #include "Config.hpp"
+#include "WaitList.hpp"
 
 namespace CppRtos
 {
@@ -67,6 +68,14 @@ namespace CppRtos
 	inline bool operator > (TaskPriority lhs, TaskPriority rhs)
 	{
     	return static_cast<uint8_t>(lhs) < static_cast<uint8_t>(rhs);
+	}
+
+	/**
+	 * @brief Returns true if priority a is higher than priority b (lower numeric value = higher priority).
+	 */
+	inline bool isHigherPriority(TaskPriority a, TaskPriority b)
+	{
+		return static_cast<std::uint8_t>(a) < static_cast<std::uint8_t>(b);
 	}
 
 	using StackAddr = void*;
@@ -214,6 +223,19 @@ namespace CppRtos
 	    }
 
 	    /**
+	     * @brief Sets only the effective (current) priority, keeping the base priority.
+	     *
+	     * Used by the kernel for priority inheritance. Must not be called directly for a
+	     * task that is in a ready list; use Kernel::changeTaskPriority() instead.
+	     *
+	     * @param prio The new effective priority.
+	     */
+	    inline void setCurrentPriority(const TaskPriority prio)
+	    {
+	        this->priority = prio;
+	    }
+
+	    /**
 	     * @brief Sets the base priority of the task.
 	     *
 	     * @param basePrio The base priority to set.
@@ -293,7 +315,8 @@ namespace CppRtos
 	    inline void setName(const std::string_view& name)
 	    {
 	        this->name.fill(0);
-	        size_t num_to_copy = std::min(name.size(), name.size() - 1);
+	        // Leave room for the terminating zero
+	        const size_t num_to_copy = std::min(name.size(), static_cast<size_t>(MAX_TASK_NAME - 1u));
 	        std::copy_n(name.begin(), num_to_copy, this->name.begin());
 	    }
 
@@ -315,6 +338,66 @@ namespace CppRtos
 	    [[nodiscard]] inline std::uint32_t getId() const
 	    {
 	        return id;
+	    }
+
+	    /**
+	     * @brief Wait list the task is currently blocked on (nullptr if not waiting on an object).
+	     */
+	    [[nodiscard]] inline WaitList* getWaitList() const
+	    {
+	        return waitList;
+	    }
+
+	    inline void setWaitList(WaitList* list)
+	    {
+	        waitList = list;
+	    }
+
+	    /**
+	     * @brief Reason for the last wake-up from a wait list (valid after the task resumes).
+	     */
+	    [[nodiscard]] inline WakeReason getWakeReason() const
+	    {
+	        return wakeReason;
+	    }
+
+	    inline void setWakeReason(const WakeReason reason)
+	    {
+	        wakeReason = reason;
+	    }
+
+	    /**
+	     * @brief Sequence number recorded when the task started waiting (FIFO order among equal priorities).
+	     */
+	    [[nodiscard]] inline std::uint32_t getWaitSequence() const
+	    {
+	        return waitSequence;
+	    }
+
+	    inline void setWaitSequence(const std::uint32_t sequence)
+	    {
+	        waitSequence = sequence;
+	    }
+
+	    /**
+	     * @brief Number of mutexes currently owned by the task (used to undo priority inheritance).
+	     */
+	    [[nodiscard]] inline std::uint32_t getHeldMutexCount() const
+	    {
+	        return heldMutexCount;
+	    }
+
+	    inline void incrementHeldMutexCount()
+	    {
+	        heldMutexCount++;
+	    }
+
+	    inline void decrementHeldMutexCount()
+	    {
+	        if (heldMutexCount > 0u)
+	        {
+	            heldMutexCount--;
+	        }
 	    }
 
 	private:
@@ -340,6 +423,14 @@ namespace CppRtos
 		std::uint64_t wakeUpTime				= 0u;							/**< Time when the task should wake up if it is sleeping. */
 
 		ITask* taskInterfacePtr					= nullptr;						/**< Pointer to the task interface. */
+
+		WaitList* waitList						= nullptr;						/**< Wait list the task is blocked on, nullptr if none. */
+
+		WakeReason wakeReason					= WakeReason::eNone;			/**< Reason for the last wake-up from a wait list. */
+
+		std::uint32_t waitSequence				= 0u;							/**< Sequence number when the task started waiting. */
+
+		std::uint32_t heldMutexCount			= 0u;							/**< Number of mutexes owned by the task. */
 	};
 
 	/**

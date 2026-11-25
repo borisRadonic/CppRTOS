@@ -5,8 +5,10 @@
 #include <array>
 #include <algorithm>
 #include "InternalKernelAcessor.hpp"
-#include "SpinLock.hpp"
 #include "Config.hpp"
+#include "Fifo.hpp"
+#include "WaitList.hpp"
+#include "Kernel.hpp"
 
 namespace CppRtos
 {
@@ -42,7 +44,7 @@ namespace CppRtos
          * @return MsgQueueResult The result of the send operation.
          * - MsgQueueResult::Success: The message was successfully sent.
          * - MsgQueueResult::ErrorQueueFull: The message queue is full and no space is available.
-         * - MsgQueueResult::ErrorCalledFromISR: The send operation was called from an ISR with a timeout other than NoWait.
+         * - From an ISR the call never blocks: if the queue is full, MsgQueueResult::ErrorQueueFull is returned.
          * - MsgQueueResult::Timeout: The send operation timed out before space became available.
          */
         MsgQueueResult send(const T_MESSAGE& message, std::uint32_t timeout);
@@ -68,9 +70,9 @@ namespace CppRtos
         std::size_t getNumMsg() const;
 
     private:
-        Fifo<T_MESSAGE, MAX_MESSAGES> queue; /**< Fifo for storing messages */
-        mutable Mutex mtx;
-        CppRtos::SpinLock spnLock;
+        Fifo<T_MESSAGE, MAX_MESSAGES> queue;    /**< Fifo for storing messages */
+        WaitList waitingSenders;                /**< Tasks waiting for free space */
+        WaitList waitingReceivers;              /**< Tasks waiting for a message */
     };
 
     template<typename T_MESSAGE, std::size_t MAX_MESSAGES>
@@ -80,80 +82,56 @@ namespace CppRtos
     MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::send(const T_MESSAGE& message, std::uint32_t timeout)
     {
         internal::InternalKernelAcessor kernelAccessor;
- 
-        /*Check if called from ISR*/
-        if (kernelAccessor.isInsideInterrupt())
+        const bool fromIsr = kernelAccessor.isInsideInterrupt();
+        const bool waitForever = (timeout == WAIT_FOREVER);
+
+        kernelAccessor.enterCritical();
+        const std::uint64_t deadline = kernelAccessor.getTickCount() + timeout;
+
+        while (queue.isFull())
         {
-            if (queue.isFull())
+            // An ISR never blocks; timeout 0 means no wait
+            if (fromIsr || (timeout == 0u))
             {
+                kernelAccessor.exitCritical();
                 return MsgQueueResult::ErrorQueueFull;
             }
-            // Disable interrupts
-            kernelAccessor.enterCritical();
-            // Queue the message
-            spnLock.lock();
-            queue.enqueue(message);
-            spnLock.unlock();
-            kernelAccessor.exitCritical();
-            return MsgQueueResult::Success;
-        }
-        else
-        {
-            if (queue.isFull())
-            {
-                if (timeout == 0u)
-                {
-                    return MsgQueueResult::ErrorQueueFull;
-                }
-                else if (timeout == WAIT_FOREVER)
-                {
-                    if (mtx.acquire(timeout) != MutexResult::Success)
-                    {
-                        return MsgQueueResult::Timeout;
-                    }
 
-                    // Wait indefinitely until space is available
-                    while (queue.isFull())
-                    {
-                        mtx.release();
-                        kernelAccessor.yield();
-                        if (mtx.acquire(timeout) != MutexResult::Success)
-                        {
-                            return MsgQueueResult::Timeout;
-                        }
-                    }
-                }
-                else
+            std::uint32_t remaining = WAIT_FOREVER;
+            if (!waitForever)
+            {
+                const std::uint64_t now = kernelAccessor.getTickCount();
+                if (now >= deadline)
                 {
-                    if (mtx.acquire(timeout) != MutexResult::Success)
-                    {
-                        return MsgQueueResult::Timeout;
-                    }
-                    // Wait for the specified timeout
-                    std::uint64_t end = kernelAccessor.getTickCount() + timeout;
-                    while (queue.isFull())
-                    {
-                        mtx.release();
-                        if (kernelAccessor.getTickCount() > end)
-                        {                            
-                            return MsgQueueResult::Timeout;
-                        }
-                        kernelAccessor.yield();
-                        if (mtx.acquire(timeout) != MutexResult::Success)
-                        {
-                            return MsgQueueResult::Timeout;
-                        }
-                    }
+                    kernelAccessor.exitCritical();
+                    return MsgQueueResult::Timeout;
                 }
+                remaining = static_cast<std::uint32_t>(deadline - now);
             }
+
+            // Block until a receiver frees a slot or the timeout expires
+            kernelAccessor.blockCurrentTask(waitingSenders, remaining);
+            kernelAccessor.exitCritical();
+            kernelAccessor.yield();
+            kernelAccessor.enterCritical();
+
+            if (kernelAccessor.getCurrentTaskWakeReason() == WakeReason::eTimeout)
+            {
+                kernelAccessor.exitCritical();
+                return MsgQueueResult::Timeout;
+            }
+            // Signaled: re-check, another sender may have taken the free slot meanwhile
         }
-        kernelAccessor.enterCritical();
-        // Queue the message
-        spnLock.lock();
+
         queue.enqueue(message);
-        spnLock.unlock();
+        const bool switchRequired = kernelAccessor.wakeOne(waitingReceivers);
         kernelAccessor.exitCritical();
-        
+
+        if (switchRequired)
+        {
+            // Pends PendSV; from an ISR the switch happens when the ISR returns
+            kernelAccessor.yield();
+        }
         return MsgQueueResult::Success;
     }
 
@@ -161,46 +139,57 @@ namespace CppRtos
     MsgQueueResult MessageQueue<T_MESSAGE, MAX_MESSAGES>::receive(T_MESSAGE& message, std::uint32_t timeout)
     {
         internal::InternalKernelAcessor kernelAccessor;
-
         if (kernelAccessor.isInsideInterrupt())
         {
             return MsgQueueResult::ErrorCalledFromISR;
         }
+        const bool waitForever = (timeout == WAIT_FOREVER);
 
-       
-        if (queue.isEmpty())
+        kernelAccessor.enterCritical();
+        const std::uint64_t deadline = kernelAccessor.getTickCount() + timeout;
+
+        while (queue.isEmpty())
         {
             if (timeout == 0u)
             {
+                kernelAccessor.exitCritical();
                 return MsgQueueResult::ErrorQueueEmpty;
             }
-            else if (timeout == WAIT_FOREVER)
+
+            std::uint32_t remaining = WAIT_FOREVER;
+            if (!waitForever)
             {
-                // Wait indefinitely until a message is available
-                while (queue.isEmpty())
+                const std::uint64_t now = kernelAccessor.getTickCount();
+                if (now >= deadline)
                 {
-                    kernelAccessor.yield();
+                    kernelAccessor.exitCritical();
+                    return MsgQueueResult::Timeout;
                 }
+                remaining = static_cast<std::uint32_t>(deadline - now);
             }
-            else
+
+            // Block until a sender posts a message or the timeout expires
+            kernelAccessor.blockCurrentTask(waitingReceivers, remaining);
+            kernelAccessor.exitCritical();
+            kernelAccessor.yield();
+            kernelAccessor.enterCritical();
+
+            if (kernelAccessor.getCurrentTaskWakeReason() == WakeReason::eTimeout)
             {
-                // Wait for the specified timeout
-                std::uint64_t end = kernelAccessor.getTickCount() + timeout;
-                while (queue.isEmpty())
-                {
-                    if (kernelAccessor.getTickCount() > end)
-                    {
-                        return MsgQueueResult::Timeout;
-                    }
-                    kernelAccessor.yield();
-                }
+                kernelAccessor.exitCritical();
+                return MsgQueueResult::Timeout;
             }
+            // Signaled: re-check, another receiver may have taken the message meanwhile
         }
-        kernelAccessor.enterCritical();
-        spnLock.lock();
+
         message = queue.dequeue();
-        spnLock.unlock();
+        const bool switchRequired = kernelAccessor.wakeOne(waitingSenders);
         kernelAccessor.exitCritical();
+
+        if (switchRequired)
+        {
+            kernelAccessor.yield();
+        }
         return MsgQueueResult::Success;
     }
 

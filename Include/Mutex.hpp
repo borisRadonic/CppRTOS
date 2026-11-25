@@ -5,7 +5,7 @@
 #include <array>
 #include "Config.hpp"
 #include "Kernel.hpp"
-#include "Fifo.hpp"
+#include "WaitList.hpp"
 
 
 namespace CppRtos
@@ -85,6 +85,7 @@ namespace CppRtos
          * 
          * If the mutex is not available, the task will be blocked until the mutex
          * is released by another task or an optional timeout occurs.
+         * While a higher-priority task waits, the owner inherits its priority (priority inheritance).
          * 
          * @param ticksTimeout The number of ticks to wait before timing out. Use WAIT_FOREVER to wait indefinitely.
          * @return MutexResult The result of the acquire operation.
@@ -98,9 +99,10 @@ namespace CppRtos
         /**
          * @brief Releases the mutex, allowing other tasks to acquire it.
          * 
-         * If there are tasks waiting on the mutex, one of them will be unblocked
-         * and allowed to acquire the mutex. If no tasks are waiting, the mutex
-         * is released and becomes available.
+         * If there are tasks waiting on the mutex, ownership is handed over directly to the
+         * highest-priority waiter. If no tasks are waiting, the mutex becomes available.
+         * The priority inherited by the releasing task is restored to its base priority once
+         * it no longer owns any mutex.
          * 
          * @return MutexResult The result of the release operation.
          * - MutexResult::Success: The mutex was successfully released.
@@ -110,18 +112,7 @@ namespace CppRtos
         MutexResult release();
 
     private:
-
-        /**
-         * @brief Checks if any tasks in the blocked queue have the given priority.
-         * 
-         * @param priority The priority level to check for blocking tasks.
-         * @return true if there is any task blocking at the given priority level, false otherwise.
-         */
-        bool isAnyTaskBlocking(CppRtos::TaskPriority priority);
-       
-    private:
-        std::int32_t count = 0u;                                /**< The count of the mutex */
         TaskData* owner = nullptr;                              /**< Pointer to the task that currently owns the mutex */
-        Fifo<TaskData*, Settings::MAX_TASKS> blockedTasks = {}; /**< Queue of tasks waiting on the mutex */
+        WaitList waitingTasks;                                  /**< Tasks waiting on the mutex (woken by priority, FIFO among equal priorities) */
     };
 }

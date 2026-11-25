@@ -7,7 +7,7 @@
 
 #include <cstdint>
 #include "Config.hpp"
-#include "Fifo.hpp"
+#include "WaitList.hpp"
 #include "Task.hpp"
 
 namespace CppRtos
@@ -66,7 +66,8 @@ namespace CppRtos
         * This method blocks the calling task until the specified event flags are set or
         * the optional timeout period expires. If the flags are already set, the function
         * returns immediately. If the timeout is zero, the function returns immediately
-        * without waiting.
+        * without waiting. The wait is satisfied when any of the requested flags is set.
+        * Must not block from an ISR: called from an ISR it only checks the flags.
         *
         * @param flagsToWaitFor The set of flags to wait for.
         * @param timeout The maximum time (in system ticks) to wait for the flags. Defaults to WAIT_FOREVER.
@@ -117,13 +118,12 @@ namespace CppRtos
         uint32_t eventFlags;
 
         /**
-        * @brief Queue of tasks waiting on events.
+        * @brief Tasks waiting on events.
         *
-        * A FIFO queue that stores pointers to tasks that are currently blocked, waiting for
-        * specific event flags to be set. When the flags are set, the tasks are unblocked and
-        * removed from this queue.
+        * Each waiting task stores the flags it waits for in its TaskData. When matching flags
+        * are set, the tasks are woken and removed from this wait list.
         */
-        Fifo<TaskData*, Settings::MAX_TASKS> waitingTasks; // Tasks waiting on events
+        WaitList waitingTasks; // Tasks waiting on events
 
         /**
         * @brief Pointer to the kernel instance.

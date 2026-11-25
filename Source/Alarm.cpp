@@ -65,8 +65,9 @@ namespace CppRtos
                         }
                     }
                 }
-                else
+                else if( callback )
                 {
+                    // Runs in tick (SysTick ISR) context
                     callback( callbackArg );
                 }
             }

@@ -1,0 +1,353 @@
+diff --git a/Source/Kernel.cpp b/Source/Kernel.cpp
+index 10f8464..0035535 100644
+--- a/Source/Kernel.cpp
++++ b/Source/Kernel.cpp
+@@ -3,6 +3,28 @@
+ 
+ namespace CppRtos
+ {
++    namespace
++    {
++        /**
++         * @brief Returns the index of the lowest set bit. The value must not be zero.
++         */
++        inline std::uint32_t lowestSetBit(std::uint32_t value)
++        {
++            assert(value != 0u);
++#if defined(__GNUC__) || defined(__clang__)
++            return static_cast<std::uint32_t>(__builtin_ctz(value));
++#else
++            std::uint32_t index = 0u;
++            while ((value & 1u) == 0u)
++            {
++                value >>= 1u;
++                index++;
++            }
++            return index;
++#endif
++        }
++    }
++
+     Kernel::Kernel()
+     :  state( KernelState::eReset )
+     , lastError( KernelError::eOK )			
+@@ -11,6 +33,8 @@ namespace CppRtos
+     {
+         tasks.fill(nullptr);
+         timers.fill(nullptr);
++        // Start each round-robin cursor at the last id, so the first selection at a level picks the lowest id.
++        lastScheduledId.fill(static_cast<std::uint8_t>(Settings::MAX_TASKS - 1u));
+ 
+         this->addTask( idleTask );
+         currentTask = idleTask.getTaskData();
+@@ -29,22 +53,11 @@ namespace CppRtos
+             //add task to the Ready List
+             port.enterCritical();
+ 
+-            TaskPriority priority = ptrTaskData->getPriority();
+-
+-            if( priority > highestTaskPriority )
+-            {
+-                highestTaskPriority = priority;
+-            }
+-
+             StackAddr pStack = port.initialiseStack(static_cast<void*>(ptrTaskData->getCurrentStackPtr()), static_cast<void*>(this ));
+             ptrTaskData->setCurrentStackPtr( pStack );
+ 
+-            auto prio = static_cast<std::size_t>(priority);
+-            assert( prio < readyTasks.size() );
+-            if( prio < readyTasks.size() )
+-            {
+-                readyTasks[prio] = readyTasks[prio] | (1u << ptrTaskData->getId());
+-            }
++            // Insert into the ready list and mark the priority level as non-empty
++            setTaskReady( ptrTaskData );
+             port.exitCritical();
+         }
+     }
+@@ -215,6 +228,11 @@ namespace CppRtos
+         assert( state == KernelState::eReady );
+         if( state == KernelState::eReady)
+         {
++            // Select the first task to run, so the scheduler starts with the highest-priority ready task.
++            port.enterCritical();
++            selectHighestPriorityTask();
++            port.exitCritical();
++
+             port.startScheduler();
+         }
+     }
+@@ -228,45 +246,53 @@ namespace CppRtos
+ 
+     }
+ 
+-    void Kernel::selectHighestPriorityTask() 
++    void Kernel::selectHighestPriorityTask()
+     {
+-        port.enterCritical();
+-        //take next ready task with highest priority
+-        auto startPrio = static_cast<std::uint8_t>(highestTaskPriority);
+-        for (std::uint8_t countPrio = startPrio; countPrio < static_cast<std::uint8_t>(TaskPriority::PRIORITY_IDLE); countPrio++ )
++        // The running task is not kept in the ready lists. Put it back if it was preempted
++        // (still running), so it competes with the other ready tasks. Blocked or sleeping
++        // tasks have already left the running state and are not re-inserted.
++        if( (currentTask != nullptr) && (currentTask->getState() == TaskStateType::eRunning) )
+         {
+-            std::uint32_t taskBitList = readyTasks[countPrio];
+-            std::uint8_t countTask = 0u;
+-            while (taskBitList != 0u)
+-            {
+-                if(  taskBitList & 1u )
+-                {
+-                    TaskData* ptrTaskData = tasks[countTask];
+-                    // Preempt the current running task if necessary
+-                    if( currentTask->getState() == TaskStateType::eRunning )
+-                    {
+-                        setTaskReady( currentTask );
+-                    }
++            setTaskReady( currentTask );
++        }
+ 
+-                    ptrTaskData->setState( TaskStateType::eRunning );
+-                    currentTask = ptrTaskData;
++        if( priorityBitmap == 0u )
++        {
++            // Nothing is ready. Cannot happen while the idle task exists; keep the current task.
++            return;
++        }
+ 
+-                    // Clear the bit for this task in readyTasks
+-                    readyTasks[countPrio] &= ~(1u << countTask);
++        // Lower numeric value means higher priority, so the lowest set bit is the highest ready priority.
++        const std::uint32_t prio = lowestSetBit( priorityBitmap );
++        const std::uint32_t readyMask = readyTasks[prio];
+ 
+-                    if( readyTasks[countPrio] == 0u )
+-                    {
+-                        priorityBitmap &= ~(1u << countPrio);
++        // Round-robin within the level: take the first ready task with an id greater than the one
++        // scheduled last at this level, otherwise wrap around to the lowest id.
++        const std::uint32_t firstCandidate = static_cast<std::uint32_t>(lastScheduledId[prio]) + 1u;
++        std::uint32_t candidates = 0u;
++        if( firstCandidate < 32u )
++        {
++            candidates = readyMask & ~((1u << firstCandidate) - 1u);
++        }
++        if( candidates == 0u )
++        {
++            candidates = readyMask;
++        }
+ 
+-                    }
+-                    port.exitCritical();
+-                    return;						
+-                }
+-                taskBitList >>= 1u;
+-                countTask++;
+-            }						
++        const std::uint32_t id = lowestSetBit( candidates );
++        TaskData* ptrNextTask = tasks[id];
++        assert( ptrNextTask != nullptr );
++
++        // Remove the selected task from its ready list
++        readyTasks[prio] &= ~(1u << id);
++        if( readyTasks[prio] == 0u )
++        {
++            priorityBitmap &= ~(1u << prio);
+         }
+-        port.exitCritical();
++
++        lastScheduledId[prio] = static_cast<std::uint8_t>(id);
++        ptrNextTask->setState( TaskStateType::eRunning );
++        currentTask = ptrNextTask;
+     }
+ 
+     void Kernel::tick()
+diff --git a/Source/Mutex.cpp b/Source/Mutex.cpp
+index ec1287e..066be99 100644
+--- a/Source/Mutex.cpp
++++ b/Source/Mutex.cpp
+@@ -48,7 +48,6 @@ namespace CppRtos
+                 
+                 if (count <= 0)
+                 {
+-                    ptrKernel->enterCritical();
+                     count++;
+                     owner = ptrTaskData;
+                     ptrKernel->exitCritical();
+diff --git a/Test/UnitTests/Scheduling_Test.cpp b/Test/UnitTests/Scheduling_Test.cpp
+index 0a4f1d6..09eee36 100644
+--- a/Test/UnitTests/Scheduling_Test.cpp
++++ b/Test/UnitTests/Scheduling_Test.cpp
+@@ -78,7 +78,7 @@ TEST_F(KernelTest, SelectHighestPriorityTask_SelectsCorrectTask)
+     EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
+ }
+ 
+-TEST_F(KernelTest, SelectHighestPriorityTask_PreemptsCurrentTask)
++TEST_F(KernelTest, SelectHighestPriorityTask_LowerPriorityDoesNotPreempt)
+ {
+     TaskData* ptrTaskData1 = mockTask1.getTaskData();
+     TaskData* ptrTaskData2 = mockTask2.getTaskData();
+@@ -90,11 +90,160 @@ TEST_F(KernelTest, SelectHighestPriorityTask_PreemptsCurrentTask)
+     port.selectHighestPriorityTask(); // taskData1 is running
+     EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
+ 
++    // Next scheduling point (e.g. tick): the higher-priority task keeps running
+     port.selectHighestPriorityTask();
+ 
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
++    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
++    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
++}
++
++TEST_F(KernelTest, SelectHighestPriorityTask_HigherPriorityWakeUpPreempts)
++{
++    TaskData* ptrTaskData1 = mockTask1.getTaskData();
++    TaskData* ptrTaskData2 = mockTask2.getTaskData();
++
++    Port::Port& port = kernel->getPort();
++
++    // Task 1 (higher priority) blocks, Task 2 runs
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
++    port.resetTaskReady(ptrTaskData1, TaskStateType::eBlocked);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
++
++    // Task 1 becomes ready again and preempts Task 2
++    port.setTaskReady(ptrTaskData1);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
++    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eRunning);
++    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eReady);
++}
++
++TEST_F(KernelTest, SelectHighestPriorityTask_IdleRunsWhenNothingElseIsReady)
++{
++    TaskData* ptrTaskData1 = mockTask1.getTaskData();
++    TaskData* ptrTaskData2 = mockTask2.getTaskData();
++
++    Port::Port& port = kernel->getPort();
++
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
++    port.resetTaskReady(ptrTaskData1, TaskStateType::eSleeping);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
++    port.resetTaskReady(ptrTaskData2, TaskStateType::eBlocked);
++    port.selectHighestPriorityTask();
++
++    TaskData* ptrIdle = port.getCurrentTask();
++    ASSERT_NE(ptrIdle, nullptr);
++    EXPECT_NE(ptrIdle, ptrTaskData1);
++    EXPECT_NE(ptrIdle, ptrTaskData2);
++    EXPECT_EQ(ptrIdle->getPriority(), TaskPriority::PRIORITY_IDLE);
++    EXPECT_EQ(ptrIdle->getState(), TaskStateType::eRunning);
++    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eSleeping);
++}
++
++TEST_F(KernelTest, SelectHighestPriorityTask_SleepingTaskWakesUpOnTick)
++{
++    TaskData* ptrTaskData1 = mockTask1.getTaskData();
++    TaskData* ptrTaskData2 = mockTask2.getTaskData();
++
++    Port::Port& port = kernel->getPort();
++
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1);
++
++    EXPECT_THROW(mockTask1.sleep(2), CppRtos::UnitTestException);
++    port.selectHighestPriorityTask();
+     EXPECT_EQ(port.getCurrentTask(), ptrTaskData2);
+-    EXPECT_EQ(ptrTaskData1->getState(), TaskStateType::eReady);
+-    EXPECT_EQ(ptrTaskData2->getState(), TaskStateType::eRunning);
++
++    port.incrementTickCount();
++    port.tick();
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData2); // still sleeping after 1 tick
++
++    port.incrementTickCount();
++    port.tick();
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), ptrTaskData1); // woken up and preempts task 2
++}
++
++// Fixture with three tasks of equal priority for round-robin tests
++class RoundRobinTest : public ::testing::Test
++{
++public:
++    std::aligned_storage_t<sizeof(CppRtos::Kernel), 8> _prealoc_kernel_mem;
++    Kernel* kernel;
++    MockTask mockTaskA;
++    MockTask mockTaskB;
++    MockTask mockTaskC;
++    MockTask mockTaskLow;
++
++    void SetUp() override
++    {
++        CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
++        kernel = kernelFactory.create(&_prealoc_kernel_mem);
++
++        mockTaskA.setPriority(TaskPriority::PRIORITY_AVERAGE);
++        mockTaskB.setPriority(TaskPriority::PRIORITY_AVERAGE);
++        mockTaskC.setPriority(TaskPriority::PRIORITY_AVERAGE);
++        mockTaskLow.setPriority(TaskPriority::PRIORITY_LOW);
++
++        kernel->addTask(mockTaskA);
++        kernel->addTask(mockTaskB);
++        kernel->addTask(mockTaskC);
++        kernel->addTask(mockTaskLow);
++    }
++
++    void TearDown() override
++    {
++        CppRtos::KernelFactory& kernelFactory = CppRtos::KernelFactory::getInstance();
++        kernelFactory.destroy(&_prealoc_kernel_mem);
++    }
++};
++
++TEST_F(RoundRobinTest, EqualPriorityTasksRotate_LowerPriorityNeverRuns)
++{
++    TaskData* a = mockTaskA.getTaskData();
++    TaskData* b = mockTaskB.getTaskData();
++    TaskData* c = mockTaskC.getTaskData();
++    TaskData* low = mockTaskLow.getTaskData();
++
++    Port::Port& port = kernel->getPort();
++
++    TaskData* expected[] = { a, b, c, a, b, c, a };
++    for (TaskData* e : expected)
++    {
++        port.selectHighestPriorityTask();
++        EXPECT_EQ(port.getCurrentTask(), e);
++        EXPECT_EQ(e->getState(), TaskStateType::eRunning);
++        EXPECT_EQ(low->getState(), TaskStateType::eReady);
++    }
++}
++
++TEST_F(RoundRobinTest, BlockedTaskIsSkippedInRotation)
++{
++    TaskData* a = mockTaskA.getTaskData();
++    TaskData* b = mockTaskB.getTaskData();
++    TaskData* c = mockTaskC.getTaskData();
++
++    Port::Port& port = kernel->getPort();
++
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), a);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), b);
++
++    // b blocks
++    port.resetTaskReady(b, TaskStateType::eBlocked);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), c);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), a);
++    port.selectHighestPriorityTask();
++    EXPECT_EQ(port.getCurrentTask(), c);
++    EXPECT_EQ(b->getState(), TaskStateType::eBlocked);
+ }
+ 
+ int main(int argc, char** argv)
